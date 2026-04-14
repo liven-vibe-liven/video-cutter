@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Video Scene Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f13;
+      --card: #1a1a24;
+      --border: #2a2a3a;
+      --text: #e0e0f0;
+      --muted: #6b6b8a;
+      --accent: #7c3aed;
+      --green: #22c55e;
+      --red: #ef4444;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header .badge {
+      font-size: 0.72rem;
+      background: #1f1f2e;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    /* ── Upload ── */
+    #uploadSection {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 64px);
+      padding: 24px;
+    }
+    .upload-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 520px;
+      text-align: center;
+    }
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 48px 24px;
+      cursor: pointer;
+      position: relative;
+      transition: border-color .2s, background .2s;
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--accent);
+      background: rgba(124,58,237,.06);
+    }
+    .drop-zone input { position: absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .drop-title { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .drop-sub { font-size: .82rem; color: var(--muted); }
+
+    .file-row {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #22223a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 14px;
+      text-align: left;
+    }
+    .file-row.show { display: flex; }
+    .file-row .name { flex:1; font-size:.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .file-row .size { font-size:.78rem; color:var(--muted); }
+
+    /* threshold */
+    .threshold-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .threshold-row label { white-space: nowrap; }
+    .threshold-row input[type=range] { flex:1; accent-color: var(--accent); }
+    .threshold-row .val { min-width: 28px; color: var(--text); font-weight: 600; }
+
+    .btn-primary {
+      display: block; width: 100%; margin-top: 18px;
+      padding: 13px;
+      background: linear-gradient(135deg, #7c3aed, #2563eb);
+      color: #fff; border: none; border-radius: 12px;
+      font-size: .96rem; font-weight: 600; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .btn-primary:disabled { opacity: .4; cursor: default; }
+    .btn-primary:hover:not(:disabled) { opacity: .88; }
+
+    .error-msg {
+      margin-top: 14px;
+      background: #1f0d0d;
+      border: 1px solid #4d1a1a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: .84rem;
+      color: var(--red);
+      display: none;
+    }
+    .error-msg.show { display: block; }
+
+    /* ── Loading ── */
+    #loadingSection { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 64px); gap: 20px; }
+    #loadingSection.show { display: flex; }
+    .spinner-big {
+      width: 48px; height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .load-step { color: var(--muted); font-size: .9rem; }
+    .progress-track { width: 260px; background: var(--border); border-radius: 999px; height: 6px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg,#7c3aed,#2563eb); border-radius: 999px; transition: width .4s; width: 0%; }
+
+    /* ── Editor ── */
+    #editorSection { display: none; flex-direction: column; min-height: calc(100vh - 64px); }
+    #editorSection.show { display: flex; }
+
+    .toolbar {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .toolbar .info { font-size: .84rem; color: var(--muted); flex: 1; }
+    .toolbar .info strong { color: var(--text); }
+    .btn-sm {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-size: .8rem;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .btn-sm:hover { border-color: #4a4a6a; background: #1f1f2e; }
+    .btn-sm.green { border-color: #166534; color: var(--green); }
+    .btn-sm.green:hover { background: #0d2d1a; }
+    .btn-sm.red { border-color: #7f1d1d; color: var(--red); }
+    .btn-sm.red:hover { background: #2d0d0d; }
+
+    /* Scene grid */
+    .scene-grid {
+      flex: 1;
+      padding: 16px 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+      overflow-y: auto;
+      padding-bottom: 100px;
+    }
+
+    .scene-card {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid var(--green);
+      cursor: pointer;
+      position: relative;
+      background: #111;
+      transition: border-color .15s, transform .1s;
+      user-select: none;
+    }
+    .scene-card:hover { transform: scale(1.02); }
+    .scene-card.removed { border-color: var(--red); }
+
+    .scene-card img {
+      width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block;
+    }
+    .scene-card .no-thumb {
+      width: 100%; aspect-ratio: 16/9;
+      display: flex; align-items: center; justify-content: center;
+      background: #1a1a24; font-size: 1.5rem;
+    }
+
+    .scene-card .meta {
+      padding: 6px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .72rem;
+      color: var(--muted);
+    }
+    .scene-card .meta .num { font-weight: 700; color: var(--text); }
+
+    /* Overlay when removed */
+    .scene-card .overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(239,68,68,.35);
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+    .scene-card.removed .overlay { display: flex; }
+
+    /* Status badge per card */
+    .scene-card .badge-keep,
+    .scene-card .badge-rm {
+      position: absolute;
+      top: 6px; right: 6px;
+      font-size: .62rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .scene-card .badge-keep { background: var(--green); color: #000; }
+    .scene-card .badge-rm   { background: var(--red);   color: #fff; display: none; }
+    .scene-card.removed .badge-keep { display: none; }
+    .scene-card.removed .badge-rm   { display: block; }
+
+    /* ── Bottom bar ── */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(15,15,19,.92);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .bottom-bar .summary { flex: 1; font-size: .88rem; }
+    .bottom-bar .summary strong { color: var(--green); }
+    .bottom-bar .summary .dur { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+
+    .btn-export {
+      padding: 12px 28px;
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      color: #fff; border: none; border-radius: 10px;
+      font-size: .92rem; font-weight: 700; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .btn-export:disabled { opacity: .4; cursor: default; }
+    .btn-export:hover:not(:disabled) { opacity: .88; }
+
+    .btn-new {
+      padding: 11px 20px;
+      background: transparent;
+      color: var(--muted); border: 1px solid var(--border); border-radius: 10px;
+      font-size: .84rem; cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-new:hover { border-color: #4a4a6a; color: var(--text); }
+
+    /* ── Export overlay ── */
+    .export-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .export-overlay.show { display: flex; }
+    .export-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      text-align: center;
+      min-width: 300px;
+    }
+    .export-box h2 { margin-bottom: 20px; font-size: 1.1rem; }
+    .export-box .sub { color: var(--muted); font-size: .84rem; margin-top: 12px; }
+
+    .btn-dl {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 28px; margin-top: 20px;
+      background: var(--green); color: #000; border: none; border-radius: 10px;
+      font-size: .96rem; font-weight: 700; cursor: pointer; text-decoration: none;
+      transition: opacity .2s;
+    }
+    .btn-dl:hover { opacity: .85; }
+    .btn-back {
+      display: block; margin-top: 10px;
+      background: transparent; border: none; color: var(--muted);
+      font-size: .82rem; cursor: pointer;
+    }
+    .btn-back:hover { color: var(--text); }
+
+    /* ── AI Suggest ── */
+    .btn-ai {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid #4c1d95;
+      background: rgba(124,58,237,.15);
+      color: #a78bfa;
+      font-size: .8rem;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      display: none;
+    }
+    .btn-ai.visible { display: inline-flex; align-items: center; gap: 6px; }
+    .btn-ai:hover { background: rgba(124,58,237,.3); border-color: #7c3aed; }
+    .btn-ai:disabled { opacity: .4; cursor: default; }
+
+    .ai-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .ai-overlay.show { display: flex; }
+    .ai-box {
+      background: var(--card);
+      border: 1px solid #4c1d95;
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      min-width: 280px;
+    }
+    .ai-box h2 { margin-bottom: 8px; font-size: 1rem; }
+    .ai-box .sub { color: var(--muted); font-size: .82rem; margin-top: 8px; }
+
+    /* AI reason tooltip on scene card */
+    .scene-card .ai-badge {
+      position: absolute;
+      bottom: 28px; left: 6px;
+      font-size: .58rem;
+      font-weight: 600;
+      padding: 2px 5px;
+      border-radius: 4px;
+      max-width: calc(100% - 12px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background: rgba(124,58,237,.8);
+      color: #e9d5ff;
+      display: none;
+    }
+    .scene-card.has-ai-hint .ai-badge { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>✂️ Video Scene Editor</h1>
+  <span class="badge" id="aiBadge">manual mode</span>
+</div>
+
+<!-- Upload -->
+<div id="uploadSection">
+  <div class="upload-card">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="video/*"/>
+      <div class="drop-icon">🎬</div>
+      <div class="drop-title">Drop video or click to select</div>
+      <div class="drop-sub">MP4 · MOV · AVI · MKV · up to 500 MB</div>
+    </div>
+
+    <div class="file-row" id="fileRow">
+      <span>🎥</span>
+      <span class="name" id="fileName"></span>
+      <span class="size" id="fileSize"></span>
+    </div>
+
+    <div class="threshold-row">
+      <label>Scene sensitivity:</label>
+      <input type="range" id="threshSlider" min="5" max="80" value="30" step="5"/>
+      <span class="val" id="threshVal">0.30</span>
+    </div>
+
+    <button class="btn-primary" id="uploadBtn" disabled>Detect Scenes</button>
+    <div class="error-msg" id="uploadError"></div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loadingSection">
+  <div class="spinner-big"></div>
+  <div class="load-step" id="loadStep">Processing...</div>
+  <div class="progress-track">
+    <div class="progress-fill" id="loadProgress"></div>
+  </div>
+</div>
+
+<!-- Editor -->
+<div id="editorSection">
+  <div class="toolbar">
+    <div class="info" id="toolbarInfo"></div>
+    <button class="btn-ai" id="btnAiSuggest">✨ AI Suggest</button>
+    <button class="btn-sm green" id="btnKeepAll">✓ Keep all</button>
+    <button class="btn-sm red"   id="btnRemoveAll">✕ Remove all</button>
+    <button class="btn-sm" id="btnInvert">⇄ Invert</button>
+    <button class="btn-new" id="btnNewVideo">New video</button>
+  </div>
+  <div class="scene-grid" id="sceneGrid"></div>
+</div>
+
+<!-- Bottom bar (inside editor) -->
+<div class="bottom-bar" id="bottomBar" style="display:none">
+  <div class="summary">
+    <div id="summaryText"></div>
+    <div class="dur" id="summaryDur"></div>
+  </div>
+  <button class="btn-export" id="btnExport">Export video ↓</button>
+</div>
+
+<!-- AI overlay -->
+<div class="ai-overlay" id="aiOverlay">
+  <div class="ai-box">
+    <div class="spinner-big" id="aiSpinner" style="margin:0 auto 16px"></div>
+    <h2 id="aiTitle">AI is analyzing scenes...</h2>
+    <div class="sub" id="aiSub">Transcribing audio and selecting best moments</div>
+  </div>
+</div>
+
+<!-- Export overlay -->
+<div class="export-overlay" id="exportOverlay">
+  <div class="export-box" id="exportBox">
+    <div class="spinner-big" id="exportSpinner" style="margin:0 auto 16px"></div>
+    <h2 id="exportTitle">Exporting...</h2>
+    <div class="sub" id="exportSub">Please wait while the video is being cut</div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let jobId = null;
+let scenes = [];
+let removed = new Set();  // scene indices marked as removed
+let pollTimer = null;
+let aiAvailable = false;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function fmt(secs) {
+  const m = Math.floor(secs / 60);
+  const s = (secs % 60).toFixed(1).padStart(4, '0');
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+function fmtSize(b) {
+  return b > 1048576 ? (b/1048576).toFixed(1)+' MB' : (b/1024).toFixed(0)+' KB';
+}
+
+function show(id)  { $(id).classList.add('show'); }
+function hide(id)  { $(id).classList.remove('show'); }
+function setStyle(id, v) { $(id).style.display = v; }
+
+// ── Upload section ─────────────────────────────────────────────────────────
+const dropZone  = $('dropZone');
+const fileInput = $('fileInput');
+
+fileInput.addEventListener('change', e => e.target.files[0] && selectFile(e.target.files[0]));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+});
+
+let selectedFile = null;
+function selectFile(file) {
+  selectedFile = file;
+  $('fileName').textContent = file.name;
+  $('fileSize').textContent  = fmtSize(file.size);
+  $('fileRow').classList.add('show');
+  $('uploadBtn').disabled = false;
+}
+
+// Threshold slider
+const slider = $('threshSlider');
+const threshVal = $('threshVal');
+slider.addEventListener('input', () => { threshVal.textContent = (slider.value/100).toFixed(2); });
+
+$('uploadBtn').addEventListener('click', startUpload);
+
+async function startUpload() {
+  if (!selectedFile) return;
+  const threshold = slider.value / 100;
+
+  $('uploadError').classList.remove('show');
+  $('uploadBtn').disabled = true;
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+
+  let res;
+  try {
+    res = await fetch(`/upload?threshold=${threshold}`, { method: 'POST', body: fd });
+  } catch {
+    showUploadError('Network error. Is the server running?');
+    return;
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showUploadError(err.detail || 'Upload failed');
+    return;
+  }
+
+  const data = await res.json();
+  jobId = data.job_id;
+
+  setStyle('uploadSection', 'none');
+  $('loadingSection').classList.add('show');
+  startPolling('detecting');
+}
+
+function showUploadError(msg) {
+  $('uploadError').textContent = '❌ ' + msg;
+  $('uploadError').classList.add('show');
+  $('uploadBtn').disabled = false;
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────
+function startPolling(phase) {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => poll(phase), 1200);
+}
+
+async function poll(phase) {
+  let data;
+  try {
+    const res = await fetch(`/status/${jobId}`);
+    data = await res.json();
+  } catch { return; }
+
+  if (phase === 'detecting') {
+    $('loadStep').textContent = data.step || 'Processing...';
+    $('loadProgress').style.width = data.progress + '%';
+
+    if (data.status === 'ready') {
+      clearInterval(pollTimer);
+      scenes = data.scenes;
+      removed = new Set();
+      showEditor();
+    } else if (data.status === 'error') {
+      clearInterval(pollTimer);
+      $('loadingSection').classList.remove('show');
+      setStyle('uploadSection', 'flex');
+      showUploadError(data.error || 'Scene detection failed');
+      $('uploadBtn').disabled = false;
+    }
+  }
+
+  if (phase === 'exporting') {
+    if (data.status === 'done') {
+      clearInterval(pollTimer);
+      showDownload();
+    } else if (data.status === 'ready' && data.error) {
+      clearInterval(pollTimer);
+      $('exportSpinner').style.display = 'none';
+      $('exportTitle').textContent = 'Export failed';
+      $('exportSub').textContent = data.error;
+    }
+  }
+}
+
+// ── Editor ─────────────────────────────────────────────────────────────────
+function showEditor() {
+  $('loadingSection').classList.remove('show');
+  $('editorSection').classList.add('show');
+  setStyle('bottomBar', 'flex');
+  renderGrid();
+  updateSummary();
+}
+
+function renderGrid() {
+  const grid = $('sceneGrid');
+  grid.innerHTML = '';
+  scenes.forEach(scene => {
+    const card = document.createElement('div');
+    card.className = 'scene-card';
+    card.dataset.idx = scene.index;
+
+    const thumb = scene.thumbnail
+      ? `<img src="${scene.thumbnail}" loading="lazy" alt="scene ${scene.index}"/>`
+      : `<div class="no-thumb">🎞️</div>`;
+
+    card.innerHTML = `
+      ${thumb}
+      <div class="overlay">✕</div>
+      <span class="badge-keep">KEEP</span>
+      <span class="badge-rm">SKIP</span>
+      <div class="meta">
+        <span class="num">#${scene.index + 1}</span>
+        <span>${fmt(scene.duration)}</span>
+      </div>
+    `;
+
+    card.addEventListener('click', () => toggleScene(scene.index));
+    grid.appendChild(card);
+  });
+}
+
+function toggleScene(idx) {
+  if (removed.has(idx)) removed.delete(idx);
+  else removed.add(idx);
+  const card = document.querySelector(`.scene-card[data-idx="${idx}"]`);
+  card.classList.toggle('removed', removed.has(idx));
+  updateSummary();
+}
+
+function setAllRemoved(state) {
+  scenes.forEach(s => {
+    if (state) removed.add(s.index);
+    else removed.delete(s.index);
+    const card = document.querySelector(`.scene-card[data-idx="${s.index}"]`);
+    if (card) card.classList.toggle('removed', state);
+  });
+  updateSummary();
+}
+
+function invertSelection() {
+  scenes.forEach(s => {
+    if (removed.has(s.index)) removed.delete(s.index);
+    else removed.add(s.index);
+    const card = document.querySelector(`.scene-card[data-idx="${s.index}"]`);
+    if (card) card.classList.toggle('removed', removed.has(s.index));
+  });
+  updateSummary();
+}
+
+function updateSummary() {
+  const kept = scenes.filter(s => !removed.has(s.index));
+  const totalDur = kept.reduce((a, s) => a + s.duration, 0);
+  $('summaryText').innerHTML = `<strong>${kept.length}</strong> / ${scenes.length} scenes kept`;
+  $('summaryDur').textContent = `Total duration: ${fmt(totalDur)}`;
+  $('btnExport').disabled = kept.length === 0;
+}
+
+$('btnKeepAll').addEventListener('click', () => setAllRemoved(false));
+$('btnRemoveAll').addEventListener('click', () => setAllRemoved(true));
+$('btnInvert').addEventListener('click', invertSelection);
+$('btnNewVideo').addEventListener('click', resetAll);
+
+// ── Export ─────────────────────────────────────────────────────────────────
+$('btnExport').addEventListener('click', async () => {
+  const keepIndices = scenes.filter(s => !removed.has(s.index)).map(s => s.index);
+  if (!keepIndices.length) return;
+
+  $('exportSpinner').style.display = 'block';
+  $('exportTitle').textContent = 'Exporting...';
+  $('exportSub').textContent = 'Cutting and merging scenes';
+  $('exportOverlay').classList.add('show');
+
+  await fetch(`/export/${jobId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(keepIndices),
+  });
+
+  startPolling('exporting');
+});
+
+function showDownload() {
+  $('exportSpinner').style.display = 'none';
+  $('exportTitle').textContent = '✅ Done!';
+  $('exportSub').innerHTML = `
+    <a href="/download/${jobId}" class="btn-dl">⬇️ Download video</a>
+    <button class="btn-back" onclick="closeExport()">← Back to editor</button>
+  `;
+}
+
+function closeExport() {
+  $('exportOverlay').classList.remove('show');
+}
+
+// ── AI Suggest ─────────────────────────────────────────────────────────────
+async function checkAiStatus() {
+  try {
+    const res = await fetch('/api-status');
+    const data = await res.json();
+    aiAvailable = data.available;
+    if (aiAvailable) {
+      $('aiBadge').textContent = 'AI ready';
+      $('aiBadge').style.color = '#a78bfa';
+      $('btnAiSuggest').classList.add('visible');
+    }
+  } catch { /* server not running yet */ }
+}
+checkAiStatus();
+
+$('btnAiSuggest').addEventListener('click', async () => {
+  if (!jobId) return;
+  $('btnAiSuggest').disabled = true;
+  $('aiSpinner').style.display = 'block';
+  $('aiTitle').textContent = 'AI is analyzing scenes...';
+  $('aiSub').textContent = 'Transcribing audio and selecting best moments';
+  $('aiOverlay').classList.add('show');
+
+  let data;
+  try {
+    const res = await fetch(`/analyze/${jobId}`, { method: 'POST' });
+    data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'AI analysis failed');
+  } catch (e) {
+    $('aiSpinner').style.display = 'none';
+    $('aiTitle').textContent = '❌ AI failed';
+    $('aiSub').textContent = e.message;
+    setTimeout(() => $('aiOverlay').classList.remove('show'), 3000);
+    $('btnAiSuggest').disabled = false;
+    return;
+  }
+
+  // Apply suggestions
+  if (data.suggestions) {
+    data.suggestions.forEach(s => {
+      if (!s.keep) removed.add(s.index);
+      else removed.delete(s.index);
+
+      const card = document.querySelector(`.scene-card[data-idx="${s.index}"]`);
+      if (card) {
+        card.classList.toggle('removed', !s.keep);
+        // Show AI reason hint
+        let badge = card.querySelector('.ai-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'ai-badge';
+          card.appendChild(badge);
+        }
+        badge.textContent = s.reason || '';
+        card.classList.add('has-ai-hint');
+      }
+    });
+    updateSummary();
+  }
+
+  $('aiOverlay').classList.remove('show');
+  $('btnAiSuggest').disabled = false;
+});
+
+// ── Reset ──────────────────────────────────────────────────────────────────
+function resetAll() {
+  clearInterval(pollTimer);
+  jobId = null; scenes = []; removed = new Set();
+  selectedFile = null;
+  fileInput.value = '';
+  $('fileRow').classList.remove('show');
+  $('uploadBtn').disabled = true;
+  $('uploadError').classList.remove('show');
+  $('loadProgress').style.width = '0%';
+  $('sceneGrid').innerHTML = '';
+  $('editorSection').classList.remove('show');
+  $('loadingSection').classList.remove('show');
+  $('exportOverlay').classList.remove('show');
+  $('aiOverlay').classList.remove('show');
+  $('btnAiSuggest').disabled = false;
+  setStyle('bottomBar', 'none');
+  setStyle('uploadSection', 'flex');
+}
+</script>
+</body>
+</html>

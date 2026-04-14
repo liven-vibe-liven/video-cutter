@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Temp / uploads / outputs
+uploads/
+outputs/
+thumbnails/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.jpg
+*.jpeg
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude
+.claude/
+
+# Secrets
+.env
+*.env
