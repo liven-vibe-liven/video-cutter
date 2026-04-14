@@ -356,6 +356,21 @@
     .ai-box h2 { margin-bottom: 8px; font-size: 1rem; }
     .ai-box .sub { color: var(--muted); font-size: .82rem; margin-top: 8px; }
 
+    /* Transcript above thumbnail */
+    .scene-card .transcript {
+      padding: 6px 8px 5px;
+      font-size: .68rem;
+      color: #b0b0d0;
+      line-height: 1.45;
+      background: #12121c;
+      max-height: 54px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      border-bottom: 1px solid var(--border);
+    }
+
     /* AI reason tooltip on scene card */
     .scene-card .ai-badge {
       position: absolute;
@@ -613,7 +628,12 @@ function renderGrid() {
       ? `<img src="${scene.thumbnail}" loading="lazy" alt="scene ${scene.index}"/>`
       : `<div class="no-thumb">🎞️</div>`;
 
+    const transcript = scene.transcript
+      ? `<div class="transcript">${scene.transcript}</div>`
+      : '';
+
     card.innerHTML = `
+      ${transcript}
       ${thumb}
       <div class="overlay">✕</div>
       <span class="badge-keep">KEEP</span>

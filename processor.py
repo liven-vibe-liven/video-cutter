@@ -214,6 +214,33 @@ async def process_upload(job_id: str, threshold: float = 0.3):
             extract_thumbnail(job.input_path, t, thumb_path)
             scene["thumbnail"] = f"/thumbnail/{job_id}/{i}"
 
+        # Try to transcribe audio (optional — skipped if faster-whisper not installed)
+        update_job(job_id, step="Transcribing audio...", progress=96)
+        try:
+            import tempfile, shutil as _shutil
+            _tmp = Path(tempfile.mkdtemp())
+            _audio = str(_tmp / "audio.wav")
+            _extract_audio_for_transcription(job.input_path, _audio)
+
+            from faster_whisper import WhisperModel
+            _model = WhisperModel("tiny", device="cpu", compute_type="int8")
+            _segs, _ = _model.transcribe(_audio, word_timestamps=False)
+
+            _texts: list[list[str]] = [[] for _ in scenes]
+            for seg in _segs:
+                mid = (seg.start + seg.end) / 2
+                for sc in scenes:
+                    if sc["start"] <= mid < sc["end"]:
+                        _texts[sc["index"]].append(seg.text.strip())
+                        break
+
+            for sc in scenes:
+                sc["transcript"] = " ".join(_texts[sc["index"]]).strip()
+
+            _shutil.rmtree(str(_tmp), ignore_errors=True)
+        except Exception:
+            pass  # no transcript — UI just shows nothing
+
         update_job(job_id, status="ready", step="Ready", progress=100, scenes=scenes)
 
     except Exception as e:
