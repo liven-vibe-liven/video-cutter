@@ -150,12 +150,11 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
             tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
             cmd = [
                 FFMPEG, "-y",
-                "-ss", str(s["start"]),
                 "-i", input_path,
+                "-ss", str(s["start"]),
                 "-t", str(round(s["duration"], 3)),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-c:a", "aac", "-b:a", "128k",
-                "-avoid_negative_ts", "make_zero",
                 tmp_out,
             ]
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
