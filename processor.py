@@ -151,8 +151,8 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
             cmd = [
                 FFMPEG, "-y",
                 "-ss", str(s["start"]),
-                "-to", str(s["end"]),
                 "-i", input_path,
+                "-t", str(round(s["duration"], 3)),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-c:a", "aac", "-b:a", "128k",
                 "-avoid_negative_ts", "make_zero",
@@ -160,7 +160,8 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
             ]
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode != 0:
-                raise RuntimeError(f"Segment {i} failed:\n{r.stderr[-2000:]}")
+                lines = [l for l in r.stderr.splitlines() if l.strip()]
+                raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(lines[-8:]))
             temp_files.append(tmp_out)
 
         # Step 2: write concat list
