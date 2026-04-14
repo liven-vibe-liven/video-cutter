@@ -224,15 +224,23 @@ async def process_upload(job_id: str, threshold: float = 0.3):
 
             from faster_whisper import WhisperModel
             _model = WhisperModel("tiny", device="cpu", compute_type="int8")
-            _segs, _ = _model.transcribe(_audio, word_timestamps=False)
+            _segs, _ = _model.transcribe(_audio, word_timestamps=True)
 
             _texts: list[list[str]] = [[] for _ in scenes]
             for seg in _segs:
-                mid = (seg.start + seg.end) / 2
-                for sc in scenes:
-                    if sc["start"] <= mid < sc["end"]:
-                        _texts[sc["index"]].append(seg.text.strip())
-                        break
+                if seg.words:
+                    for word in seg.words:
+                        mid = (word.start + word.end) / 2
+                        for sc in scenes:
+                            if sc["start"] <= mid < sc["end"]:
+                                _texts[sc["index"]].append(word.word)
+                                break
+                else:
+                    mid = (seg.start + seg.end) / 2
+                    for sc in scenes:
+                        if sc["start"] <= mid < sc["end"]:
+                            _texts[sc["index"]].append(seg.text.strip())
+                            break
 
             for sc in scenes:
                 sc["transcript"] = " ".join(_texts[sc["index"]]).strip()
