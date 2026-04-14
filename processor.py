@@ -150,11 +150,11 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
             tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
             cmd = [
                 FFMPEG, "-y",
-                "-i", input_path,
                 "-ss", str(s["start"]),
+                "-i", input_path,
                 "-t", str(round(s["duration"], 3)),
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                "-c:a", "aac", "-b:a", "128k",
+                "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
                 tmp_out,
             ]
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -171,18 +171,20 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
                 safe = tf.replace("'", "'\\''")
                 f.write(f"file '{safe}'\n")
 
-        # Step 3: concat demuxer — stream copy (no quality loss, fast)
+        # Step 3: concat + re-encode to normalize timestamps across segments
         cmd = [
             FFMPEG, "-y",
             "-f", "concat", "-safe", "0",
             "-i", list_path,
-            "-c", "copy",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             output_path,
         ]
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
-            raise RuntimeError(f"Concat failed:\n{r.stderr[-2000:]}")
+            lines = [l for l in r.stderr.splitlines() if l.strip()]
+            raise RuntimeError("Concat failed:\n" + "\n".join(lines[-8:]))
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
