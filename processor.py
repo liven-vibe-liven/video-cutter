@@ -171,13 +171,12 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
                 safe = tf.replace("'", "'\\''")
                 f.write(f"file '{safe}'\n")
 
-        # Step 3: concat + re-encode to normalize timestamps across segments
+        # Step 3: concat via stream copy (no re-encoding needed)
         cmd = [
             FFMPEG, "-y",
             "-f", "concat", "-safe", "0",
             "-i", list_path,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
+            "-c", "copy",
             "-movflags", "+faststart",
             output_path,
         ]
