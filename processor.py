@@ -169,32 +169,69 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
 
 # ── Async jobs ────────────────────────────────────────────────────────────────
 
+def _split_by_punctuation(
+    scenes: list[dict], all_words: list[tuple]
+) -> list[dict]:
+    """
+    Split scenes at sentence boundaries (., , ! ?).
+    Each resulting sub-scene is at least MIN_DUR seconds.
+    """
+    MIN_DUR = 1.0
+    new_scenes: list[dict] = []
+
+    for sc in scenes:
+        # words whose midpoint falls inside this scene
+        sc_words = [
+            (ws, we, wt) for ws, we, wt in all_words
+            if sc["start"] <= (ws + we) / 2 < sc["end"]
+        ]
+
+        # candidate split points: end-time of words with punctuation
+        candidates: list[float] = []
+        for ws, we, wt in sc_words:
+            if wt.strip().endswith((".", ",", "!", "?")):
+                candidates.append(we)
+
+        # keep only splits that leave at least MIN_DUR on each side
+        valid_splits: list[float] = []
+        last = sc["start"]
+        for c in candidates:
+            if c - last >= MIN_DUR and sc["end"] - c >= MIN_DUR:
+                valid_splits.append(c)
+                last = c
+
+        if not valid_splits:
+            new_scenes.append(sc)
+            continue
+
+        boundaries = [sc["start"]] + valid_splits + [sc["end"]]
+        for i in range(len(boundaries) - 1):
+            new_scenes.append({
+                "index": len(new_scenes),
+                "start": round(boundaries[i], 3),
+                "end": round(boundaries[i + 1], 3),
+                "duration": round(boundaries[i + 1] - boundaries[i], 3),
+            })
+
+    for i, sc in enumerate(new_scenes):
+        sc["index"] = i
+
+    return new_scenes
+
+
 async def process_upload(job_id: str, threshold: float = 0.3):
-    """Detect scenes + extract thumbnails. Updates job when done."""
+    """Detect scenes, transcribe, split by punctuation, extract thumbnails."""
     job = jobs.get(job_id)
     if not job:
         return
     try:
+        # 1. Visual scene detection
         update_job(job_id, step="Detecting scene changes...", progress=10)
         scenes = detect_scenes(job.input_path, threshold)
 
-        thumb_dir = THUMBNAILS_DIR / job_id
-        thumb_dir.mkdir(exist_ok=True)
-
-        total = len(scenes)
-        for i, scene in enumerate(scenes):
-            update_job(
-                job_id,
-                step=f"Extracting thumbnails ({i + 1}/{total})...",
-                progress=10 + int(85 * (i + 1) / total),
-            )
-            t = scene["start"] + scene["duration"] / 2
-            thumb_path = str(thumb_dir / f"{i:04d}.jpg")
-            extract_thumbnail(job.input_path, t, thumb_path)
-            scene["thumbnail"] = f"/thumbnail/{job_id}/{i}"
-
-        # Try to transcribe audio (optional — skipped if faster-whisper not installed)
-        update_job(job_id, step="Transcribing audio...", progress=96)
+        # 2. Transcribe audio (optional)
+        update_job(job_id, step="Transcribing audio...", progress=20)
+        all_words: list[tuple] = []  # (start, end, word_text)
         try:
             import tempfile, shutil as _shutil
             _tmp = Path(tempfile.mkdtemp())
@@ -205,28 +242,48 @@ async def process_upload(job_id: str, threshold: float = 0.3):
             _model = WhisperModel("tiny", device="cpu", compute_type="int8")
             _segs, _ = _model.transcribe(_audio, word_timestamps=True)
 
-            _texts: list[list[str]] = [[] for _ in scenes]
             for seg in _segs:
                 if seg.words:
                     for word in seg.words:
-                        mid = (word.start + word.end) / 2
-                        for sc in scenes:
-                            if sc["start"] <= mid < sc["end"]:
-                                _texts[sc["index"]].append(word.word)
-                                break
+                        all_words.append((word.start, word.end, word.word))
                 else:
-                    mid = (seg.start + seg.end) / 2
-                    for sc in scenes:
-                        if sc["start"] <= mid < sc["end"]:
-                            _texts[sc["index"]].append(seg.text.strip())
-                            break
-
-            for sc in scenes:
-                sc["transcript"] = " ".join(_texts[sc["index"]]).strip()
+                    all_words.append((seg.start, seg.end, seg.text.strip()))
 
             _shutil.rmtree(str(_tmp), ignore_errors=True)
         except Exception:
-            pass  # no transcript — UI just shows nothing
+            pass  # transcription optional
+
+        # 3. Split scenes at punctuation boundaries
+        if all_words:
+            update_job(job_id, step="Splitting at sentence boundaries...", progress=35)
+            scenes = _split_by_punctuation(scenes, all_words)
+
+        # 4. Assign transcript text to each final scene
+        if all_words:
+            texts: list[list[str]] = [[] for _ in scenes]
+            for ws, we, wt in all_words:
+                mid = (ws + we) / 2
+                for sc in scenes:
+                    if sc["start"] <= mid < sc["end"]:
+                        texts[sc["index"]].append(wt)
+                        break
+            for sc in scenes:
+                sc["transcript"] = " ".join(texts[sc["index"]]).strip()
+
+        # 5. Extract thumbnails for final scene list
+        thumb_dir = THUMBNAILS_DIR / job_id
+        thumb_dir.mkdir(exist_ok=True)
+        total = len(scenes)
+        for i, scene in enumerate(scenes):
+            update_job(
+                job_id,
+                step=f"Extracting thumbnails ({i + 1}/{total})...",
+                progress=40 + int(55 * (i + 1) / total),
+            )
+            t = scene["start"] + scene["duration"] / 2
+            thumb_path = str(thumb_dir / f"{i:04d}.jpg")
+            extract_thumbnail(job.input_path, t, thumb_path)
+            scene["thumbnail"] = f"/thumbnail/{job_id}/{i}"
 
         update_job(job_id, status="ready", step="Ready", progress=100, scenes=scenes)
 
