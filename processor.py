@@ -154,7 +154,9 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
         "-i", input_path,
         "-filter_complex", filter_complex,
         "-map", "[vout]", "-map", "[aout]",
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-fps_mode", "passthrough",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+        "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
         output_path,
@@ -163,8 +165,10 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
         cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     if r.returncode != 0:
-        lines = [l for l in r.stderr.splitlines() if l.strip()]
-        raise RuntimeError("Export failed:\n" + "\n".join(lines[-8:]))
+        all_lines = [l for l in r.stderr.splitlines() if l.strip()]
+        # show first 5 lines (codec info / errors) + last 5 lines (final error)
+        snippet = all_lines[:5] + (["..."] if len(all_lines) > 10 else []) + all_lines[-5:]
+        raise RuntimeError("Export failed:\n" + "\n".join(snippet))
 
 
 # ── Async jobs ────────────────────────────────────────────────────────────────
@@ -176,7 +180,7 @@ def _split_by_punctuation(
     Split scenes at sentence boundaries (., , ! ?).
     Each resulting sub-scene is at least MIN_DUR seconds.
     """
-    MIN_DUR = 1.0
+    MIN_DUR = 3.0
     new_scenes: list[dict] = []
 
     for sc in scenes:
