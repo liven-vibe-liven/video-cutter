@@ -136,57 +136,35 @@ def extract_thumbnail(video_path: str, time: float, output_path: str):
 
 def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
     """
-    Cut scenes from input and concatenate using temp files + concat demuxer.
-    This approach reliably preserves audio across all formats.
+    Single-pass cut+concat using filter_complex trim (frame-accurate, no temp files).
     """
-    import tempfile
-    import shutil
+    n = len(scenes)
+    parts = []
+    for i, sc in enumerate(scenes):
+        s, e = sc["start"], sc["end"]
+        parts.append(
+            f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{i}];"
+            f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS[a{i}];"
+        )
+    concat_in = "".join(f"[v{i}][a{i}]" for i in range(n))
+    filter_complex = "".join(parts) + f"{concat_in}concat=n={n}:v=1:a=1[vout][aout]"
 
-    tmp_dir = Path(tempfile.mkdtemp())
-    try:
-        # Step 1: extract each scene to its own temp file (re-encode to ensure compatible streams)
-        temp_files = []
-        for i, s in enumerate(scenes):
-            tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
-            cmd = [
-                FFMPEG, "-y",
-                "-ss", str(s["start"]),
-                "-i", input_path,
-                "-t", str(round(s["duration"], 3)),
-                "-c", "copy",
-                "-avoid_negative_ts", "make_zero",
-                tmp_out,
-            ]
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-            if r.returncode != 0:
-                lines = [l for l in r.stderr.splitlines() if l.strip()]
-                raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(lines[-8:]))
-            temp_files.append(tmp_out)
-
-        # Step 2: write concat list
-        list_path = str(tmp_dir / "list.txt")
-        with open(list_path, "w", encoding="utf-8") as f:
-            for tf in temp_files:
-                # escape single quotes in path just in case
-                safe = tf.replace("'", "'\\''")
-                f.write(f"file '{safe}'\n")
-
-        # Step 3: concat via stream copy (no re-encoding needed)
-        cmd = [
-            FFMPEG, "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", list_path,
-            "-c", "copy",
-            "-movflags", "+faststart",
-            output_path,
-        ]
-        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        if r.returncode != 0:
-            lines = [l for l in r.stderr.splitlines() if l.strip()]
-            raise RuntimeError("Concat failed:\n" + "\n".join(lines[-8:]))
-
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+    cmd = [
+        FFMPEG, "-y",
+        "-i", input_path,
+        "-filter_complex", filter_complex,
+        "-map", "[vout]", "-map", "[aout]",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    r = subprocess.run(
+        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if r.returncode != 0:
+        lines = [l for l in r.stderr.splitlines() if l.strip()]
+        raise RuntimeError("Export failed:\n" + "\n".join(lines[-8:]))
 
 
 # ── Async jobs ────────────────────────────────────────────────────────────────
