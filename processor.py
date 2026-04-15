@@ -136,46 +136,62 @@ def extract_thumbnail(video_path: str, time: float, output_path: str):
 
 def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
     """
-    Cut+concat using per-scene fast seek inputs + filter_complex trim.
-    Each scene is a separate -ss input so FFmpeg never decodes the whole file.
+    Encode each scene sequentially (one FFmpeg process at a time) to stay
+    within Railway memory limits, then concat with stream copy.
+    Fast seek + trim filter = precise cuts without decoding the whole file.
     """
-    n = len(scenes)
+    import tempfile, shutil
 
-    # One input per scene with fast seek to scene start
-    inputs: list[str] = []
-    for sc in scenes:
-        inputs += ["-ss", str(sc["start"]), "-i", input_path]
+    tmp_dir = Path(tempfile.mkdtemp())
+    try:
+        temp_files = []
+        for i, sc in enumerate(scenes):
+            tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
+            dur = round(sc["duration"], 3)
+            cmd = [
+                FFMPEG, "-y",
+                "-ss", str(sc["start"]),       # fast seek to scene start
+                "-i", input_path,
+                "-vf", f"trim=end={dur},setpts=PTS-STARTPTS",
+                "-af", f"atrim=end={dur},asetpts=PTS-STARTPTS",
+                "-fps_mode", "passthrough",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                tmp_out,
+            ]
+            r = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+            if r.returncode != 0:
+                lines = [l for l in r.stderr.splitlines() if l.strip()]
+                snippet = lines[:3] + (["..."] if len(lines) > 8 else []) + lines[-5:]
+                raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(snippet))
+            temp_files.append(tmp_out)
 
-    # Trim each input to its exact duration, reset timestamps
-    parts = []
-    for i, sc in enumerate(scenes):
-        dur = round(sc["duration"], 3)
-        parts.append(
-            f"[{i}:v]trim=end={dur},setpts=PTS-STARTPTS[v{i}];"
-            f"[{i}:a]atrim=end={dur},asetpts=PTS-STARTPTS[a{i}];"
+        # All segments encoded — concat with stream copy (no re-encode needed)
+        list_path = str(tmp_dir / "list.txt")
+        with open(list_path, "w", encoding="utf-8") as f:
+            for tf in temp_files:
+                f.write(f"file '{tf.replace(chr(39), chr(39)+chr(92)+chr(39)+chr(39))}'\n")
+
+        cmd = [
+            FFMPEG, "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", list_path,
+            "-c", "copy",
+            "-movflags", "+faststart",
+            output_path,
+        ]
+        r = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
-    concat_in = "".join(f"[v{i}][a{i}]" for i in range(n))
-    filter_complex = "".join(parts) + f"{concat_in}concat=n={n}:v=1:a=1[vout][aout]"
+        if r.returncode != 0:
+            lines = [l for l in r.stderr.splitlines() if l.strip()]
+            raise RuntimeError("Concat failed:\n" + "\n".join(lines[-5:]))
 
-    cmd = [
-        FFMPEG, "-y",
-        *inputs,
-        "-filter_complex", filter_complex,
-        "-map", "[vout]", "-map", "[aout]",
-        "-fps_mode", "passthrough",
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",
-        output_path,
-    ]
-    r = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
-    if r.returncode != 0:
-        all_lines = [l for l in r.stderr.splitlines() if l.strip()]
-        snippet = all_lines[:5] + (["..."] if len(all_lines) > 10 else []) + all_lines[-5:]
-        raise RuntimeError("Export failed:\n" + "\n".join(snippet))
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ── Async jobs ────────────────────────────────────────────────────────────────
