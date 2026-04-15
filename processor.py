@@ -13,9 +13,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import shutil as _shutil_sys
 import imageio_ffmpeg
 
-FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+# Prefer system ffmpeg (Railway installs it via nixpacks) — it runs without
+# the memory constraints of the static imageio-ffmpeg binary.
+_system_ffmpeg = _shutil_sys.which("ffmpeg")
+FFMPEG = _system_ffmpeg if _system_ffmpeg else imageio_ffmpeg.get_ffmpeg_exe()
 THUMBNAILS_DIR = Path("thumbnails")
 THUMBNAILS_DIR.mkdir(exist_ok=True)
 
@@ -146,21 +150,39 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
         temp_files = []
         for i, sc in enumerate(scenes):
             tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
+            dur = round(sc["duration"], 3)
+            # Re-encode for precise frame-accurate cuts
             cmd = [
                 FFMPEG, "-y",
                 "-ss", str(sc["start"]),
                 "-i", input_path,
-                "-t", str(round(sc["duration"], 3)),
-                "-c", "copy",
-                "-avoid_negative_ts", "make_zero",
+                "-t", str(dur),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-threads", "1",
+                "-c:a", "aac", "-b:a", "128k",
                 tmp_out,
             ]
             r = subprocess.run(
                 cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
             )
-            if r.returncode != 0:
-                lines = [l for l in r.stderr.splitlines() if l.strip()]
-                raise RuntimeError(f"Segment {i} failed (rc={r.returncode}):\n" + "\n".join(lines[-5:]))
+            # If re-encoding fails, fall back to stream copy (less precise but works)
+            if r.returncode != 0 or not Path(tmp_out).exists() or Path(tmp_out).stat().st_size < 1000:
+                cmd = [
+                    FFMPEG, "-y",
+                    "-ss", str(sc["start"]),
+                    "-i", input_path,
+                    "-t", str(dur),
+                    "-c", "copy",
+                    "-avoid_negative_ts", "make_zero",
+                    tmp_out,
+                ]
+                r2 = subprocess.run(
+                    cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                )
+                if r2.returncode != 0:
+                    lines = [l for l in r2.stderr.splitlines() if l.strip()]
+                    raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(lines[-5:]))
             temp_files.append(tmp_out)
 
         list_path = str(tmp_dir / "list.txt")
