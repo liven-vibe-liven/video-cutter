@@ -136,22 +136,30 @@ def extract_thumbnail(video_path: str, time: float, output_path: str):
 
 def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
     """
-    Single-pass cut+concat using filter_complex trim (frame-accurate, no temp files).
+    Cut+concat using per-scene fast seek inputs + filter_complex trim.
+    Each scene is a separate -ss input so FFmpeg never decodes the whole file.
     """
     n = len(scenes)
+
+    # One input per scene with fast seek to scene start
+    inputs: list[str] = []
+    for sc in scenes:
+        inputs += ["-ss", str(sc["start"]), "-i", input_path]
+
+    # Trim each input to its exact duration, reset timestamps
     parts = []
     for i, sc in enumerate(scenes):
-        s, e = sc["start"], sc["end"]
+        dur = round(sc["duration"], 3)
         parts.append(
-            f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{i}];"
-            f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS[a{i}];"
+            f"[{i}:v]trim=end={dur},setpts=PTS-STARTPTS[v{i}];"
+            f"[{i}:a]atrim=end={dur},asetpts=PTS-STARTPTS[a{i}];"
         )
     concat_in = "".join(f"[v{i}][a{i}]" for i in range(n))
     filter_complex = "".join(parts) + f"{concat_in}concat=n={n}:v=1:a=1[vout][aout]"
 
     cmd = [
         FFMPEG, "-y",
-        "-i", input_path,
+        *inputs,
         "-filter_complex", filter_complex,
         "-map", "[vout]", "-map", "[aout]",
         "-fps_mode", "passthrough",
@@ -166,7 +174,6 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
     )
     if r.returncode != 0:
         all_lines = [l for l in r.stderr.splitlines() if l.strip()]
-        # show first 5 lines (codec info / errors) + last 5 lines (final error)
         snippet = all_lines[:5] + (["..."] if len(all_lines) > 10 else []) + all_lines[-5:]
         raise RuntimeError("Export failed:\n" + "\n".join(snippet))
 
