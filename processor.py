@@ -136,9 +136,8 @@ def extract_thumbnail(video_path: str, time: float, output_path: str):
 
 def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
     """
-    Encode each scene sequentially (one FFmpeg process at a time) to stay
-    within Railway memory limits, then concat with stream copy.
-    Fast seek + trim filter = precise cuts without decoding the whole file.
+    Stream-copy each scene to a temp file, then concat.
+    libx264 encoding fails on Railway (OOM/signal); stream copy is stable.
     """
     import tempfile, shutil
 
@@ -147,17 +146,13 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
         temp_files = []
         for i, sc in enumerate(scenes):
             tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
-            dur = round(sc["duration"], 3)
             cmd = [
                 FFMPEG, "-y",
-                "-ss", str(sc["start"]),       # fast seek to scene start
+                "-ss", str(sc["start"]),
                 "-i", input_path,
-                "-vf", f"trim=end={dur},setpts=PTS-STARTPTS",
-                "-af", f"atrim=end={dur},asetpts=PTS-STARTPTS",
-                "-fps_mode", "passthrough",
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "128k",
+                "-t", str(round(sc["duration"], 3)),
+                "-c", "copy",
+                "-avoid_negative_ts", "make_zero",
                 tmp_out,
             ]
             r = subprocess.run(
@@ -165,15 +160,13 @@ def cut_and_concat(input_path: str, scenes: list[dict], output_path: str):
             )
             if r.returncode != 0:
                 lines = [l for l in r.stderr.splitlines() if l.strip()]
-                snippet = lines[:3] + (["..."] if len(lines) > 8 else []) + lines[-5:]
-                raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(snippet))
+                raise RuntimeError(f"Segment {i} failed (rc={r.returncode}):\n" + "\n".join(lines[-5:]))
             temp_files.append(tmp_out)
 
-        # All segments encoded — concat with stream copy (no re-encode needed)
         list_path = str(tmp_dir / "list.txt")
         with open(list_path, "w", encoding="utf-8") as f:
             for tf in temp_files:
-                f.write(f"file '{tf.replace(chr(39), chr(39)+chr(92)+chr(39)+chr(39))}'\n")
+                f.write(f"file '{tf}'\n")
 
         cmd = [
             FFMPEG, "-y",
