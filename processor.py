@@ -137,6 +137,15 @@ def _get_video_resolution(path: str):
     return None
 
 
+def _has_audio(path: str) -> bool:
+    """Return True if the file has at least one audio stream."""
+    r = subprocess.run(
+        [FFMPEG, "-i", path],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    return any("Audio:" in line for line in r.stderr.splitlines())
+
+
 def extract_thumbnail(video_path: str, time: float, output_path: str):
     """Extract one frame at `time` seconds as a JPEG thumbnail."""
     subprocess.run(
@@ -383,7 +392,7 @@ async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: s
                     "-t", "1",
                     "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                     "-pix_fmt", "yuv420p", "-threads", "1",
-                    "-c:a", "aac", "-b:a", "64k",
+                    "-c:a", "aac", "-b:a", "64k", "-ar", "44100", "-ac", "2",
                     probe_out,
                 ],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -394,7 +403,11 @@ async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: s
                 and Path(probe_out).stat().st_size > 100
             )
 
-            common_audio = ["-c:a", "aac", "-b:a", "128k"]
+            # Consistent audio for ALL segments: stereo 44100 Hz AAC.
+            # This is critical — if segments have different sample rates or
+            # channel layouts, stream-copy concat silences audio permanently.
+            audio_args = ["-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
+
             if libx264_works:
                 video_enc = [
                     "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
@@ -415,6 +428,7 @@ async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: s
 
             # ── Step 3: Encode all segments with the chosen encoder ──────────
             temp_files = []
+            source_has_audio: dict[str, bool] = {}
             total = len(timeline)
             for i, item in enumerate(timeline):
                 job_id = item["job_id"]
@@ -432,12 +446,30 @@ async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: s
                     step=f"Cutting scene {i + 1}/{total}...",
                     progress=10 + int(80 * (i + 1) // total),
                 )
-                cmd = [
-                    FFMPEG, "-y",
-                    "-ss", str(scene["start"]),
-                    "-i", source_job.input_path,
-                    "-t", str(dur),
-                ] + video_enc + scale_flags + common_audio + [tmp_out]
+
+                if job_id not in source_has_audio:
+                    source_has_audio[job_id] = _has_audio(source_job.input_path)
+
+                if source_has_audio[job_id]:
+                    cmd = [
+                        FFMPEG, "-y",
+                        "-ss", str(scene["start"]),
+                        "-i", source_job.input_path,
+                        "-t", str(dur),
+                    ] + video_enc + scale_flags + audio_args + [tmp_out]
+                else:
+                    # Source has no audio — synthesize a silent audio track so
+                    # all segments have identical stream layout for concat.
+                    cmd = [
+                        FFMPEG, "-y",
+                        "-ss", str(scene["start"]),
+                        "-i", source_job.input_path,
+                        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                        "-t", str(dur),
+                        "-map", "0:v",
+                        "-map", "1:a",
+                    ] + video_enc + scale_flags + audio_args + [tmp_out]
+
                 r = subprocess.run(
                     cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
                 )
