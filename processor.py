@@ -122,6 +122,21 @@ def detect_scenes(video_path: str, threshold: float = 0.3) -> list[dict]:
     return scenes
 
 
+def _get_video_resolution(path: str):
+    """Return (width, height) of the first video stream, or None."""
+    import re
+    r = subprocess.run(
+        [FFMPEG, "-i", path],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    for line in r.stderr.splitlines():
+        if "Video:" in line:
+            m = re.search(r"(\d{3,5})x(\d{3,5})", line)
+            if m:
+                return int(m.group(1)), int(m.group(2))
+    return None
+
+
 def extract_thumbnail(video_path: str, time: float, output_path: str):
     """Extract one frame at `time` seconds as a JPEG thumbnail."""
     subprocess.run(
@@ -336,16 +351,69 @@ async def process_upload(job_id: str, threshold: float = 0.3):
 async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: str):
     """Export a mix of scenes from multiple source videos.
 
-    Unlike single-video export, mix export MUST re-encode every segment so that
-    all clips share identical codec parameters (SPS/PPS, resolution, frame-rate).
-    Stream-copying from different H.264 sources produces incompatible bitstreams
-    that cause video freeze / corruption at every cross-source cut point.
+    KEY CONSTRAINT: every segment MUST be encoded with THE SAME codec.
+    If segment A uses libx264 and segment B uses mpeg4, stream-copy concat
+    produces a broken file (video freezes, audio from broken segment plays
+    quietly in background). So we probe once, pick one encoder, use it for all.
     """
     import tempfile, shutil as _shutil
     try:
         update_job(mix_job_id, step="Preparing...", progress=5)
         tmp_dir = Path(tempfile.mkdtemp())
         try:
+            # ── Step 1: Probe to choose encoder (once for all segments) ──────
+            first_item = timeline[0]
+            first_source = jobs.get(first_item["job_id"])
+            if not first_source:
+                raise ValueError(f"Job {first_item['job_id']} not found")
+            first_scene = next(
+                (s for s in first_source.scenes if s["index"] == first_item["scene_index"]),
+                None,
+            )
+            if not first_scene:
+                raise ValueError("First scene not found")
+
+            update_job(mix_job_id, step="Selecting encoder...", progress=5)
+            probe_out = str(tmp_dir / "probe.mp4")
+            probe_r = subprocess.run(
+                [
+                    FFMPEG, "-y",
+                    "-ss", str(first_scene["start"]),
+                    "-i", first_source.input_path,
+                    "-t", "1",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                    "-pix_fmt", "yuv420p", "-threads", "1",
+                    "-c:a", "aac", "-b:a", "64k",
+                    probe_out,
+                ],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+            libx264_works = (
+                probe_r.returncode == 0
+                and Path(probe_out).exists()
+                and Path(probe_out).stat().st_size > 100
+            )
+
+            common_audio = ["-c:a", "aac", "-b:a", "128k"]
+            if libx264_works:
+                video_enc = [
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                    "-pix_fmt", "yuv420p", "-threads", "1",
+                ]
+            else:
+                video_enc = ["-c:v", "mpeg4", "-q:v", "6", "-pix_fmt", "yuv420p"]
+
+            # ── Step 2: Detect target resolution from first source ───────────
+            # All segments are scaled to the same W×H so stream-copy concat works
+            # even when source videos have different resolutions.
+            target_res = _get_video_resolution(first_source.input_path)
+            if target_res:
+                w, h = target_res
+                scale_flags = ["-vf", f"scale={w}:{h}:force_original_aspect_ratio=disable,setsar=1"]
+            else:
+                scale_flags = []
+
+            # ── Step 3: Encode all segments with the chosen encoder ──────────
             temp_files = []
             total = len(timeline)
             for i, item in enumerate(timeline):
@@ -359,50 +427,42 @@ async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: s
                     raise ValueError(f"Scene {scene_index} not found")
                 tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
                 dur = round(scene["duration"], 3)
-                update_job(mix_job_id, step=f"Cutting scene {i+1}/{total}...", progress=10 + int(80*(i+1)//total))
-
-                # Must re-encode so all segments are bit-compatible for concat.
-                # Try libx264 first (best quality); fall back to mpeg4 (lighter on memory).
-                # Stream copy is intentionally NOT used here — different H.264 sources have
-                # incompatible SPS/PPS which causes player freeze at every cut.
-                common_audio = ["-c:a", "aac", "-b:a", "128k"]
-                encode_attempts = [
-                    ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-                     "-pix_fmt", "yuv420p", "-threads", "1"] + common_audio,
-                    ["-c:v", "mpeg4", "-q:v", "6",
-                     "-pix_fmt", "yuv420p"] + common_audio,
-                ]
-                success = False
-                last_err = ""
-                for enc_flags in encode_attempts:
-                    cmd = [
-                        FFMPEG, "-y",
-                        "-ss", str(scene["start"]),
-                        "-i", source_job.input_path,
-                        "-t", str(dur),
-                    ] + enc_flags + [tmp_out]
-                    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-                    if r.returncode == 0 and Path(tmp_out).exists() and Path(tmp_out).stat().st_size >= 1000:
-                        success = True
-                        break
-                    last_err = "\n".join([l for l in r.stderr.splitlines() if l.strip()][-5:])
-                    # Remove partial output before next attempt
-                    try:
-                        Path(tmp_out).unlink()
-                    except OSError:
-                        pass
-
-                if not success:
-                    raise RuntimeError(f"Segment {i} re-encode failed:\n{last_err}")
+                update_job(
+                    mix_job_id,
+                    step=f"Cutting scene {i + 1}/{total}...",
+                    progress=10 + int(80 * (i + 1) // total),
+                )
+                cmd = [
+                    FFMPEG, "-y",
+                    "-ss", str(scene["start"]),
+                    "-i", source_job.input_path,
+                    "-t", str(dur),
+                ] + video_enc + scale_flags + common_audio + [tmp_out]
+                r = subprocess.run(
+                    cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+                )
+                if r.returncode != 0 or not Path(tmp_out).exists() or Path(tmp_out).stat().st_size < 1000:
+                    lines = [l for l in r.stderr.splitlines() if l.strip()]
+                    raise RuntimeError(f"Segment {i} encode failed:\n" + "\n".join(lines[-5:]))
                 temp_files.append(tmp_out)
+
+            # ── Step 4: Concat (safe — all segments share the same codec) ────
             update_job(mix_job_id, step="Concatenating...", progress=92)
             list_path = str(tmp_dir / "list.txt")
             with open(list_path, "w", encoding="utf-8") as f:
                 for tf in temp_files:
                     f.write(f"file '{tf}'\n")
-            cmd = [FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", list_path,
-                   "-c", "copy", "-movflags", "+faststart", output_path]
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            cmd = [
+                FFMPEG, "-y",
+                "-f", "concat", "-safe", "0",
+                "-i", list_path,
+                "-c", "copy",
+                "-movflags", "+faststart",
+                output_path,
+            ]
+            r = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+            )
             if r.returncode != 0:
                 lines = [l for l in r.stderr.splitlines() if l.strip()]
                 raise RuntimeError("Concat failed:\n" + "\n".join(lines[-5:]))

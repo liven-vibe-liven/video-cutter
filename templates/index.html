@@ -567,7 +567,7 @@
     }
 
     .mix-source-scene {
-      width: 74px;
+      width: 90px;
       border-radius: 6px;
       overflow: hidden;
       border: 1px solid var(--border);
@@ -588,6 +588,17 @@
       font-size: .6rem;
       color: var(--muted);
       padding: 2px 4px;
+      text-align: center;
+    }
+    .mix-source-scene .sc-transcript {
+      font-size: .58rem;
+      color: var(--muted);
+      padding: 0 4px 4px;
+      line-height: 1.3;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       text-align: center;
     }
     .mix-source-scene.used {
@@ -671,6 +682,14 @@
       margin-bottom: 3px;
     }
     .mix-timeline-item .ti-dur { font-size: .72rem; color: var(--muted); }
+    .mix-timeline-item .ti-transcript {
+      font-size: .7rem;
+      color: var(--muted);
+      margin: 2px 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .mix-timeline-item .ti-del {
       background: transparent;
       border: none;
@@ -1479,7 +1498,8 @@ function buildSourcePanel(jobEntry) {
       ? `<img src="${scene.thumbnail}" loading="lazy" alt="scene ${scene.index}"/>`
       : `<div class="no-thumb-sm">🎞️</div>`;
 
-    sc.innerHTML = `${thumb}<div class="sc-dur">${fmt(scene.duration)}</div>`;
+    const tr = scene.transcript ? scene.transcript.substring(0, 50) : '';
+    sc.innerHTML = `${thumb}<div class="sc-dur">${fmt(scene.duration)}</div>${tr ? `<div class="sc-transcript">${tr}</div>` : ''}`;
 
     sc.addEventListener('dragstart', e => {
       if (usedKeys.has(scene.index)) { e.preventDefault(); return; }
@@ -1540,10 +1560,15 @@ function buildTimelineItem(item, idx) {
     ? `<img src="${item.scene.thumbnail}" loading="lazy" alt="scene"/>`
     : `<div class="no-thumb-ti">🎞️</div>`;
 
+  const tiTranscript = item.scene.transcript
+    ? `<div class="ti-transcript">${item.scene.transcript.substring(0, 80)}</div>`
+    : '';
+
   row.innerHTML = `
     ${thumb}
     <div class="ti-info">
       <span class="ti-label" style="background:${color}22;color:${color}">${label} #${item.sceneIndex + 1}</span>
+      ${tiTranscript}
       <div class="ti-dur">${fmt(item.scene.duration)}</div>
     </div>
     <button class="ti-del" title="Remove">✕</button>
