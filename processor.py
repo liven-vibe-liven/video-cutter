@@ -334,7 +334,13 @@ async def process_upload(job_id: str, threshold: float = 0.3):
 
 
 async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: str):
-    """Export a mix of scenes from multiple source videos."""
+    """Export a mix of scenes from multiple source videos.
+
+    Unlike single-video export, mix export MUST re-encode every segment so that
+    all clips share identical codec parameters (SPS/PPS, resolution, frame-rate).
+    Stream-copying from different H.264 sources produces incompatible bitstreams
+    that cause video freeze / corruption at every cross-source cut point.
+    """
     import tempfile, shutil as _shutil
     try:
         update_job(mix_job_id, step="Preparing...", progress=5)
@@ -354,18 +360,40 @@ async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: s
                 tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
                 dur = round(scene["duration"], 3)
                 update_job(mix_job_id, step=f"Cutting scene {i+1}/{total}...", progress=10 + int(80*(i+1)//total))
-                # Try re-encode, fall back to stream copy
-                cmd = [FFMPEG, "-y", "-ss", str(scene["start"]), "-i", source_job.input_path,
-                       "-t", str(dur), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-                       "-pix_fmt", "yuv420p", "-threads", "1", "-c:a", "aac", "-b:a", "128k", tmp_out]
-                r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-                if r.returncode != 0 or not Path(tmp_out).exists() or Path(tmp_out).stat().st_size < 1000:
-                    cmd = [FFMPEG, "-y", "-ss", str(scene["start"]), "-i", source_job.input_path,
-                           "-t", str(dur), "-c", "copy", "-avoid_negative_ts", "make_zero", tmp_out]
-                    r2 = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-                    if r2.returncode != 0:
-                        lines = [l for l in r2.stderr.splitlines() if l.strip()]
-                        raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(lines[-5:]))
+
+                # Must re-encode so all segments are bit-compatible for concat.
+                # Try libx264 first (best quality); fall back to mpeg4 (lighter on memory).
+                # Stream copy is intentionally NOT used here — different H.264 sources have
+                # incompatible SPS/PPS which causes player freeze at every cut.
+                common_audio = ["-c:a", "aac", "-b:a", "128k"]
+                encode_attempts = [
+                    ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                     "-pix_fmt", "yuv420p", "-threads", "1"] + common_audio,
+                    ["-c:v", "mpeg4", "-q:v", "6",
+                     "-pix_fmt", "yuv420p"] + common_audio,
+                ]
+                success = False
+                last_err = ""
+                for enc_flags in encode_attempts:
+                    cmd = [
+                        FFMPEG, "-y",
+                        "-ss", str(scene["start"]),
+                        "-i", source_job.input_path,
+                        "-t", str(dur),
+                    ] + enc_flags + [tmp_out]
+                    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    if r.returncode == 0 and Path(tmp_out).exists() and Path(tmp_out).stat().st_size >= 1000:
+                        success = True
+                        break
+                    last_err = "\n".join([l for l in r.stderr.splitlines() if l.strip()][-5:])
+                    # Remove partial output before next attempt
+                    try:
+                        Path(tmp_out).unlink()
+                    except OSError:
+                        pass
+
+                if not success:
+                    raise RuntimeError(f"Segment {i} re-encode failed:\n{last_err}")
                 temp_files.append(tmp_out)
             update_job(mix_job_id, step="Concatenating...", progress=92)
             list_path = str(tmp_dir / "list.txt")

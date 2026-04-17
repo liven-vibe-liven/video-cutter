@@ -463,6 +463,48 @@
     }
     .mix-back-btn:hover { color: var(--text); }
 
+    /* New mix upload UI */
+    .mix-upload-hint {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    .mix-slot-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #22223a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      font-size: .84rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: border-color .18s;
+      user-select: none;
+    }
+    .mix-slot-row:hover { border-color: var(--accent); }
+    .mix-slot-row .slot-label { font-weight: 600; min-width: 70px; flex-shrink: 0; }
+    .mix-slot-filename { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .mix-slot-row.picked .mix-slot-filename { color: var(--text); }
+    .btn-start-mix {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: opacity .18s;
+    }
+    .btn-start-mix:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-start-mix:not(:disabled):hover { opacity: .85; }
+
     /* Mix editor */
     #mixEditorSection {
       display: none;
@@ -713,29 +755,33 @@
   <div id="mixUploadSection">
     <div class="mix-upload-card">
       <h2>🎛️ Mix Mode</h2>
+      <div class="mix-upload-hint">Select all videos, then press Start Processing</div>
 
-      <!-- Main video slot -->
-      <div class="mix-video-slot" id="mixMainSlot">
+      <!-- Slot 0: Main video -->
+      <label class="mix-slot-row" id="mixSlotRow_0" for="mixFileInput_0">
         <span class="slot-label" style="color:var(--green)">Main</span>
-        <span class="slot-name" id="mixMainName">No file selected</span>
-        <span class="slot-status waiting" id="mixMainStatus">waiting</span>
-      </div>
+        <span class="mix-slot-filename" id="mixSlotName_0">Choose main video…</span>
+        <span class="slot-status waiting" id="mixSlotStatus_0">—</span>
+      </label>
+      <input type="file" id="mixFileInput_0" accept="video/*" style="display:none"/>
 
-      <div class="drop-zone" id="mixMainDrop" style="margin-bottom:12px">
-        <input type="file" id="mixMainFile" accept="video/*"/>
-        <div class="drop-icon">🎬</div>
-        <div class="drop-title">Select main video</div>
-        <div class="drop-sub">MP4 · MOV · AVI · MKV · up to 500 MB</div>
-      </div>
+      <!-- Slot 1: Video 2 -->
+      <label class="mix-slot-row" id="mixSlotRow_1" for="mixFileInput_1">
+        <span class="slot-label" style="color:#2563eb">Video 2</span>
+        <span class="mix-slot-filename" id="mixSlotName_1">Choose video 2…</span>
+        <span class="slot-status waiting" id="mixSlotStatus_1">—</span>
+      </label>
+      <input type="file" id="mixFileInput_1" accept="video/*" style="display:none"/>
 
-      <!-- Extra video slots (shown after main is ready) -->
-      <div id="mixExtraSlots"></div>
+      <!-- Slot 2: Video 3 (optional) -->
+      <label class="mix-slot-row" id="mixSlotRow_2" for="mixFileInput_2">
+        <span class="slot-label" style="color:#d97706">Video 3 <span style="font-weight:400;opacity:.6">(opt)</span></span>
+        <span class="mix-slot-filename" id="mixSlotName_2">Choose video 3 (optional)…</span>
+        <span class="slot-status waiting" id="mixSlotStatus_2">—</span>
+      </label>
+      <input type="file" id="mixFileInput_2" accept="video/*" style="display:none"/>
 
-      <button class="btn-add-video" id="btnAddVideo2">+ Add Video 2</button>
-      <button class="btn-add-video" id="btnAddVideo3">+ Add Video 3</button>
-
-      <input type="file" id="mixExtraFile" accept="video/*" style="display:none"/>
-
+      <button class="btn-start-mix" id="btnStartMixProcessing" disabled>Start Processing</button>
       <div class="error-msg" id="mixError"></div>
       <button class="mix-back-btn" id="btnExitMix">← Back to single video mode</button>
     </div>
@@ -1180,6 +1226,7 @@ let mixExtraJobs = []; // [{jobId, label, color, scenes, name}]
 let mixTimeline  = []; // [{jobId, sceneIndex, scene}]
 let mixPollTimers = {}; // jobId -> timer
 let dragSrc = null;    // {type:'source'|'timeline', jobId, sceneIndex, timelineIdx}
+let mixSelectedFiles = [null, null, null]; // File objects for slots 0/1/2
 
 // Colors: index 0 = video 2 (blue), index 1 = video 3 (amber)
 const MIX_COLORS = ['#2563eb', '#d97706'];
@@ -1218,14 +1265,17 @@ function exitMixMode() {
   mixTimeline = [];
   dragSrc = null;
   window.mixMainScenes = [];
-  // Reset UI
-  $('mixMainName').textContent = 'No file selected';
-  $('mixMainStatus').className = 'slot-status waiting';
-  $('mixMainStatus').textContent = 'waiting';
-  $('mixMainFile').value = '';
-  $('mixExtraSlots').innerHTML = '';
-  $('btnAddVideo2').classList.remove('visible');
-  $('btnAddVideo3').classList.remove('visible');
+  mixSelectedFiles = [null, null, null];
+  // Reset UI slots
+  const defaultNames = ['Choose main video…', 'Choose video 2…', 'Choose video 3 (optional)…'];
+  [0, 1, 2].forEach(i => {
+    $(`mixSlotName_${i}`).textContent = defaultNames[i];
+    $(`mixSlotStatus_${i}`).className = 'slot-status waiting';
+    $(`mixSlotStatus_${i}`).textContent = '—';
+    $(`mixSlotRow_${i}`).classList.remove('picked');
+    $(`mixFileInput_${i}`).value = '';
+  });
+  $('btnStartMixProcessing').disabled = true;
   $('mixError').classList.remove('show');
   $('mixEditorSection').classList.remove('show');
   $('mixBottomBar').classList.remove('show');
@@ -1233,89 +1283,53 @@ function exitMixMode() {
   setStyle('uploadSection', 'flex');
 }
 
-// ── Main video upload ─────────────────────────────────────────────────────────
-const mixMainDrop = $('mixMainDrop');
-const mixMainFile = $('mixMainFile');
-
-mixMainFile.addEventListener('change', e => {
-  if (e.target.files[0]) uploadMixMain(e.target.files[0]);
-});
-mixMainDrop.addEventListener('dragover', e => { e.preventDefault(); mixMainDrop.classList.add('over'); });
-mixMainDrop.addEventListener('dragleave', () => mixMainDrop.classList.remove('over'));
-mixMainDrop.addEventListener('drop', e => {
-  e.preventDefault(); mixMainDrop.classList.remove('over');
-  if (e.dataTransfer.files[0]) uploadMixMain(e.dataTransfer.files[0]);
+// ── File selection (all 3 slots shown simultaneously) ─────────────────────────
+[0, 1, 2].forEach(i => {
+  $(`mixFileInput_${i}`).addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    mixSelectedFiles[i] = file;
+    $(`mixSlotName_${i}`).textContent = file.name;
+    $(`mixSlotRow_${i}`).classList.add('picked');
+    updateMixStartButton();
+  });
 });
 
-async function uploadMixMain(file) {
-  $('mixMainName').textContent = file.name;
-  $('mixMainStatus').className = 'slot-status working';
-  $('mixMainStatus').textContent = 'uploading...';
+function updateMixStartButton() {
+  // Require main (slot 0) + at least one extra (slot 1 or 2)
+  const ready = mixSelectedFiles[0] && (mixSelectedFiles[1] || mixSelectedFiles[2]);
+  $('btnStartMixProcessing').disabled = !ready;
+}
+
+$('btnStartMixProcessing').addEventListener('click', startMixProcessing);
+
+async function startMixProcessing() {
+  $('btnStartMixProcessing').disabled = true;
   $('mixError').classList.remove('show');
 
-  // Hide the drop zone once file chosen
-  mixMainDrop.style.display = 'none';
+  // Mark selected slots as "uploading"
+  mixSelectedFiles.forEach((file, i) => {
+    if (!file) return;
+    $(`mixSlotStatus_${i}`).className = 'slot-status working';
+    $(`mixSlotStatus_${i}`).textContent = 'uploading…';
+  });
 
-  const fd = new FormData();
-  fd.append('file', file);
-  let res;
-  try {
-    res = await fetch('/upload?threshold=0.3', { method: 'POST', body: fd });
-  } catch {
-    showMixError('Network error uploading main video');
-    mixMainDrop.style.display = '';
-    return;
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    showMixError(err.detail || 'Upload failed');
-    mixMainDrop.style.display = '';
-    return;
-  }
-  const data = await res.json();
-  mixMainJobId = data.job_id;
-  pollMixJob(mixMainJobId, 'main');
+  // Upload all selected files in parallel
+  const uploadResults = await Promise.all(
+    mixSelectedFiles.map((file, i) => file ? uploadMixSlot(file, i) : Promise.resolve(null))
+  );
+
+  // If any required slot failed, show error (already shown inside uploadMixSlot)
+  if (!uploadResults[0]) return; // main is required
+
+  // Start polling for all uploaded jobs
+  uploadResults.forEach((jobId, i) => {
+    if (jobId) pollMixJob(jobId, i);
+  });
 }
 
-// ── Extra video upload ────────────────────────────────────────────────────────
-$('btnAddVideo2').addEventListener('click', () => triggerExtraUpload(0));
-$('btnAddVideo3').addEventListener('click', () => triggerExtraUpload(1));
-
-function triggerExtraUpload(slot) {
-  $('mixExtraFile')._slot = slot;
-  $('mixExtraFile').value = '';
-  $('mixExtraFile').click();
-}
-
-$('mixExtraFile').addEventListener('change', async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const slot = e.target._slot; // 0 or 1
-  await uploadMixExtra(file, slot);
-});
-
-async function uploadMixExtra(file, slot) {
-  const color = MIX_COLORS[slot];
-  const label = `Video ${slot + 2}`;
-
-  // Create/update slot row
-  let slotEl = $(`mixExtraSlot_${slot}`);
-  if (!slotEl) {
-    slotEl = document.createElement('div');
-    slotEl.className = 'mix-video-slot';
-    slotEl.id = `mixExtraSlot_${slot}`;
-    $('mixExtraSlots').appendChild(slotEl);
-  }
-  slotEl.innerHTML = `
-    <span class="slot-label" style="color:${color}">${label}</span>
-    <span class="slot-name">${file.name}</span>
-    <span class="slot-status working" id="mixExtraStatus_${slot}">uploading...</span>
-  `;
-
-  // Hide the button that triggered this
-  if (slot === 0) $('btnAddVideo2').classList.remove('visible');
-  if (slot === 1) $('btnAddVideo3').classList.remove('visible');
-
+async function uploadMixSlot(file, slot) {
+  const label = slot === 0 ? 'Main' : `Video ${slot + 1}`;
   const fd = new FormData();
   fd.append('file', file);
   let res;
@@ -1323,24 +1337,26 @@ async function uploadMixExtra(file, slot) {
     res = await fetch('/upload?threshold=0.3', { method: 'POST', body: fd });
   } catch {
     showMixError(`Network error uploading ${label}`);
-    return;
+    $(`mixSlotStatus_${slot}`).className = 'slot-status error';
+    $(`mixSlotStatus_${slot}`).textContent = 'error';
+    return null;
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     showMixError(err.detail || `Failed to upload ${label}`);
-    return;
+    $(`mixSlotStatus_${slot}`).className = 'slot-status error';
+    $(`mixSlotStatus_${slot}`).textContent = 'error';
+    return null;
   }
   const data = await res.json();
-
-  // Store in mixExtraJobs (by slot index, padding if needed)
-  while (mixExtraJobs.length <= slot) mixExtraJobs.push(null);
-  mixExtraJobs[slot] = { jobId: data.job_id, label, color, scenes: [], name: file.name };
-
-  pollMixJob(data.job_id, 'extra', slot);
+  $(`mixSlotStatus_${slot}`).className = 'slot-status working';
+  $(`mixSlotStatus_${slot}`).textContent = 'processing…';
+  return data.job_id;
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
-function pollMixJob(jid, type, slot) {
+// slot: 0 = main, 1 = video 2, 2 = video 3
+function pollMixJob(jid, slot) {
   if (mixPollTimers[jid]) clearInterval(mixPollTimers[jid]);
   mixPollTimers[jid] = setInterval(async () => {
     let data;
@@ -1349,70 +1365,59 @@ function pollMixJob(jid, type, slot) {
       data = await res.json();
     } catch { return; }
 
-    if (type === 'main') {
-      if (data.status === 'ready') {
-        clearInterval(mixPollTimers[jid]);
-        $('mixMainStatus').className = 'slot-status ready';
-        $('mixMainStatus').textContent = `ready (${data.scenes.length} scenes)`;
-        // Store scenes on main job entry
-        mixMainJobId = jid;
-        // Show add video buttons
-        $('btnAddVideo2').classList.add('visible');
-        checkMixEditorReady();
-      } else if (data.status === 'error') {
-        clearInterval(mixPollTimers[jid]);
-        $('mixMainStatus').className = 'slot-status error';
-        $('mixMainStatus').textContent = 'error';
-        showMixError(data.error || 'Scene detection failed for main video');
-      } else {
-        $('mixMainStatus').className = 'slot-status working';
-        $('mixMainStatus').textContent = data.step || 'processing...';
+    const statusEl = $(`mixSlotStatus_${slot}`);
+    const label = slot === 0 ? 'Main' : `Video ${slot + 1}`;
+
+    if (data.status === 'ready') {
+      clearInterval(mixPollTimers[jid]);
+      if (statusEl) {
+        statusEl.className = 'slot-status ready';
+        statusEl.textContent = `ready (${data.scenes.length} scenes)`;
       }
-    } else if (type === 'extra') {
-      const statusEl = $(`mixExtraStatus_${slot}`);
-      if (data.status === 'ready') {
-        clearInterval(mixPollTimers[jid]);
-        if (statusEl) {
-          statusEl.className = 'slot-status ready';
-          statusEl.textContent = `ready (${data.scenes.length} scenes)`;
-        }
-        if (mixExtraJobs[slot]) mixExtraJobs[slot].scenes = data.scenes;
-        // Show Video 3 button if slot 0 just finished and slot 1 not yet used
-        if (slot === 0 && (!mixExtraJobs[1] || !mixExtraJobs[1].jobId)) {
-          $('btnAddVideo3').classList.add('visible');
-        }
-        checkMixEditorReady();
-      } else if (data.status === 'error') {
-        clearInterval(mixPollTimers[jid]);
-        if (statusEl) {
-          statusEl.className = 'slot-status error';
-          statusEl.textContent = 'error';
-        }
-        showMixError(data.error || `Scene detection failed for Video ${slot + 2}`);
+      if (slot === 0) {
+        mixMainJobId = jid;
+        window.mixMainScenes = data.scenes;
       } else {
-        if (statusEl) {
-          statusEl.className = 'slot-status working';
-          statusEl.textContent = data.step || 'processing...';
-        }
+        const extraSlot = slot - 1; // 0-based index into mixExtraJobs
+        while (mixExtraJobs.length <= extraSlot) mixExtraJobs.push(null);
+        const file = mixSelectedFiles[slot];
+        mixExtraJobs[extraSlot] = {
+          jobId: jid,
+          label,
+          color: MIX_COLORS[extraSlot],
+          scenes: data.scenes,
+          name: file ? file.name : label,
+        };
+      }
+      checkMixEditorReady();
+    } else if (data.status === 'error') {
+      clearInterval(mixPollTimers[jid]);
+      if (statusEl) {
+        statusEl.className = 'slot-status error';
+        statusEl.textContent = 'error';
+      }
+      showMixError(data.error || `Scene detection failed for ${label}`);
+    } else {
+      if (statusEl) {
+        statusEl.className = 'slot-status working';
+        statusEl.textContent = data.step || 'processing…';
       }
     }
   }, 1200);
 }
 
-async function checkMixEditorReady() {
-  // Need main + at least one extra, all ready
-  if (!mixMainJobId) return;
-  const readyExtras = mixExtraJobs.filter(j => j && j.scenes.length > 0);
-  if (readyExtras.length === 0) return;
+function checkMixEditorReady() {
+  // Need main ready + every *selected* extra slot ready
+  if (!mixMainJobId || !window.mixMainScenes || window.mixMainScenes.length === 0) return;
 
-  // Fetch main video scenes if not yet loaded
-  if (!window.mixMainScenes || window.mixMainScenes.length === 0) {
-    try {
-      const res = await fetch(`/status/${mixMainJobId}`);
-      const data = await res.json();
-      window.mixMainScenes = data.scenes || [];
-    } catch { return; }
-  }
+  // Which extra slots were selected by the user?
+  const selectedExtraSlots = [1, 2].filter(i => mixSelectedFiles[i]);
+  // All selected extras must have scenes loaded
+  const allExtrasReady = selectedExtraSlots.every(i => {
+    const extraSlot = i - 1;
+    return mixExtraJobs[extraSlot] && mixExtraJobs[extraSlot].scenes.length > 0;
+  });
+  if (!allExtrasReady) return;
 
   // Pre-populate timeline with main video scenes (only on first open)
   if (mixTimeline.length === 0 && window.mixMainScenes.length > 0) {
