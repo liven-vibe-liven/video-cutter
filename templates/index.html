@@ -391,6 +391,282 @@
       display: none;
     }
     .scene-card.has-ai-hint .ai-badge { display: block; }
+
+    /* ── Mix Mode ── */
+    #mixSection { display: none; flex-direction: column; min-height: calc(100vh - 64px); }
+    #mixSection.show { display: flex; }
+
+    .mix-upload-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px 40px;
+      width: 100%;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .mix-upload-card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 20px; color: var(--text); }
+
+    #mixUploadSection {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .mix-video-slot {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #22223a;
+      border-radius: 10px;
+      padding: 11px 14px;
+      margin-bottom: 10px;
+      font-size: .84rem;
+    }
+    .mix-video-slot .slot-label { font-weight: 600; min-width: 60px; }
+    .mix-video-slot .slot-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .mix-video-slot .slot-status { font-size: .75rem; padding: 2px 8px; border-radius: 4px; }
+    .slot-status.ready   { background: #166534; color: #bbf7d0; }
+    .slot-status.working { background: #1e3a5f; color: #93c5fd; }
+    .slot-status.error   { background: #7f1d1d; color: #fca5a5; }
+    .slot-status.waiting { background: #2a2a3a; color: var(--muted); }
+
+    .btn-add-video {
+      display: none;
+      width: 100%;
+      padding: 11px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: .86rem;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-add-video.visible { display: block; }
+    .btn-add-video:hover { border-color: var(--accent); color: var(--text); }
+
+    .mix-back-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: .82rem;
+      cursor: pointer;
+      margin-top: 16px;
+      display: block;
+      width: 100%;
+      text-align: center;
+    }
+    .mix-back-btn:hover { color: var(--text); }
+
+    /* Mix editor */
+    #mixEditorSection {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+    }
+    #mixEditorSection.show { display: flex; }
+
+    .mix-toolbar {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .mix-toolbar .info { flex: 1; font-size: .84rem; color: var(--muted); }
+
+    .mix-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .mix-sources {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .mix-source-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .mix-source-panel .panel-header {
+      padding: 8px 12px;
+      font-size: .78rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mix-source-panel .panel-color-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .mix-source-panel .panel-scenes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px;
+      background: #111118;
+      min-height: 60px;
+    }
+
+    .mix-source-scene {
+      width: 74px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      cursor: grab;
+      position: relative;
+      background: #1a1a24;
+      transition: opacity .2s, border-color .2s;
+      user-select: none;
+    }
+    .mix-source-scene:active { cursor: grabbing; }
+    .mix-source-scene img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+    .mix-source-scene .no-thumb-sm {
+      width: 100%; aspect-ratio: 16/9;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .9rem; background: #1a1a24;
+    }
+    .mix-source-scene .sc-dur {
+      font-size: .6rem;
+      color: var(--muted);
+      padding: 2px 4px;
+      text-align: center;
+    }
+    .mix-source-scene.used {
+      opacity: .3;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* Timeline */
+    .mix-timeline-wrap {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .mix-timeline-header {
+      padding: 10px 16px;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mix-timeline-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px 100px;
+    }
+
+    .mix-drop-zone {
+      height: 6px;
+      border-radius: 3px;
+      margin: 2px 0;
+      transition: height .15s, background .15s;
+    }
+    .mix-drop-zone.drag-over {
+      height: 28px;
+      background: rgba(124,58,237,.3);
+      border: 1px dashed var(--accent);
+    }
+
+    .mix-timeline-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      margin: 2px 0;
+      cursor: grab;
+      user-select: none;
+      transition: border-color .15s;
+    }
+    .mix-timeline-item:active { cursor: grabbing; }
+    .mix-timeline-item:hover { border-color: #4a4a6a; }
+    .mix-timeline-item img {
+      width: 72px;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .mix-timeline-item .no-thumb-ti {
+      width: 72px;
+      aspect-ratio: 16/9;
+      display: flex; align-items: center; justify-content: center;
+      background: #1a1a24;
+      border-radius: 4px;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .mix-timeline-item .ti-info { flex: 1; overflow: hidden; }
+    .mix-timeline-item .ti-label {
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 3px;
+    }
+    .mix-timeline-item .ti-dur { font-size: .72rem; color: var(--muted); }
+    .mix-timeline-item .ti-del {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      line-height: 1;
+      transition: color .15s, background .15s;
+    }
+    .mix-timeline-item .ti-del:hover { color: var(--red); background: rgba(239,68,68,.12); }
+
+    .mix-timeline-empty {
+      text-align: center;
+      padding: 48px 16px;
+      color: var(--muted);
+      font-size: .84rem;
+    }
+    .mix-timeline-empty .arrow { font-size: 1.5rem; margin-bottom: 8px; }
+
+    /* Mix bottom bar */
+    #mixBottomBar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(15,15,19,.92);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
+      display: none;
+      align-items: center;
+      gap: 14px;
+    }
+    #mixBottomBar.show { display: flex; }
+    #mixBottomBar .summary { flex: 1; font-size: .88rem; }
+    #mixBottomBar .summary strong { color: var(--green); }
+    #mixBottomBar .summary .dur { color: var(--muted); font-size: .78rem; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -424,7 +700,92 @@
 
     <button class="btn-primary" id="uploadBtn" disabled>Detect Scenes</button>
     <div class="error-msg" id="uploadError"></div>
+
+    <button class="btn-primary" id="btnMixMode" style="margin-top:10px;background:linear-gradient(135deg,#1d4ed8,#7c3aed)">
+      🎛️ Mix Mode
+    </button>
   </div>
+</div>
+
+<!-- Mix Mode Section -->
+<div id="mixSection">
+  <!-- Mix upload / setup -->
+  <div id="mixUploadSection">
+    <div class="mix-upload-card">
+      <h2>🎛️ Mix Mode</h2>
+
+      <!-- Main video slot -->
+      <div class="mix-video-slot" id="mixMainSlot">
+        <span class="slot-label" style="color:var(--green)">Main</span>
+        <span class="slot-name" id="mixMainName">No file selected</span>
+        <span class="slot-status waiting" id="mixMainStatus">waiting</span>
+      </div>
+
+      <div class="drop-zone" id="mixMainDrop" style="margin-bottom:12px">
+        <input type="file" id="mixMainFile" accept="video/*"/>
+        <div class="drop-icon">🎬</div>
+        <div class="drop-title">Select main video</div>
+        <div class="drop-sub">MP4 · MOV · AVI · MKV · up to 500 MB</div>
+      </div>
+
+      <!-- Extra video slots (shown after main is ready) -->
+      <div id="mixExtraSlots"></div>
+
+      <button class="btn-add-video" id="btnAddVideo2">+ Add Video 2</button>
+      <button class="btn-add-video" id="btnAddVideo3">+ Add Video 3</button>
+
+      <input type="file" id="mixExtraFile" accept="video/*" style="display:none"/>
+
+      <div class="error-msg" id="mixError"></div>
+      <button class="mix-back-btn" id="btnExitMix">← Back to single video mode</button>
+    </div>
+  </div>
+
+  <!-- Mix editor (shown when videos are ready) -->
+  <div id="mixEditorSection">
+    <div class="mix-toolbar">
+      <div class="info" id="mixToolbarInfo">Drag scenes from the left into the timeline →</div>
+      <button class="btn-sm" id="btnMixClear">Clear timeline</button>
+      <button class="btn-new" id="btnMixBackToUpload">← Add videos</button>
+    </div>
+
+    <div class="mix-layout">
+      <!-- Left: source panels -->
+      <div class="mix-sources" id="mixSources"></div>
+
+      <!-- Right: timeline -->
+      <div class="mix-timeline-wrap">
+        <div class="mix-timeline-header">
+          <span>Timeline</span>
+          <span id="mixTimelineCount" style="font-size:.75rem">0 scenes</span>
+        </div>
+        <div class="mix-timeline-list" id="mixTimelineList">
+          <div class="mix-timeline-empty" id="mixTimelineEmpty">
+            <div class="arrow">←</div>
+            Drag scenes from the left panel to build your timeline
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mix Export overlay -->
+<div class="export-overlay" id="mixExportOverlay">
+  <div class="export-box" id="mixExportBox">
+    <div class="spinner-big" id="mixExportSpinner" style="margin:0 auto 16px"></div>
+    <h2 id="mixExportTitle">Exporting mix...</h2>
+    <div class="sub" id="mixExportSub">Please wait while scenes are being merged</div>
+  </div>
+</div>
+
+<!-- Mix bottom bar -->
+<div id="mixBottomBar">
+  <div class="summary">
+    <div id="mixSummaryText"></div>
+    <div class="dur" id="mixSummaryDur"></div>
+  </div>
+  <button class="btn-export" id="btnExportMix" disabled>Export mix ↓</button>
 </div>
 
 <!-- Loading -->
@@ -808,6 +1169,540 @@ function resetAll() {
   setStyle('bottomBar', 'none');
   setStyle('uploadSection', 'flex');
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MIX MODE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// State
+let mixMainJobId = null;
+let mixExtraJobs = []; // [{jobId, label, color, scenes, name}]
+let mixTimeline  = []; // [{jobId, sceneIndex, scene}]
+let mixPollTimers = {}; // jobId -> timer
+let dragSrc = null;    // {type:'source'|'timeline', jobId, sceneIndex, timelineIdx}
+
+// Colors: index 0 = video 2 (blue), index 1 = video 3 (amber)
+const MIX_COLORS = ['#2563eb', '#d97706'];
+const MIX_MAIN_COLOR = '#22c55e'; // --green
+
+// ── Entry / Exit ──────────────────────────────────────────────────────────────
+$('btnMixMode').addEventListener('click', enterMixMode);
+$('btnExitMix').addEventListener('click', exitMixMode);
+$('btnMixBackToUpload').addEventListener('click', () => {
+  $('mixEditorSection').classList.remove('show');
+  $('mixUploadSection').style.display = 'flex';
+  $('mixBottomBar').classList.remove('show');
+});
+
+function showMixError(msg) {
+  $('mixError').textContent = '❌ ' + msg;
+  $('mixError').classList.add('show');
+}
+
+function enterMixMode() {
+  setStyle('uploadSection', 'none');
+  $('loadingSection').classList.remove('show');
+  $('editorSection').classList.remove('show');
+  setStyle('bottomBar', 'none');
+  $('mixSection').classList.add('show');
+  $('mixUploadSection').style.display = 'flex';
+}
+
+function exitMixMode() {
+  // Stop all mix polls
+  Object.values(mixPollTimers).forEach(clearInterval);
+  mixPollTimers = {};
+  // Reset mix state
+  mixMainJobId = null;
+  mixExtraJobs = [];
+  mixTimeline = [];
+  dragSrc = null;
+  window.mixMainScenes = [];
+  // Reset UI
+  $('mixMainName').textContent = 'No file selected';
+  $('mixMainStatus').className = 'slot-status waiting';
+  $('mixMainStatus').textContent = 'waiting';
+  $('mixMainFile').value = '';
+  $('mixExtraSlots').innerHTML = '';
+  $('btnAddVideo2').classList.remove('visible');
+  $('btnAddVideo3').classList.remove('visible');
+  $('mixError').classList.remove('show');
+  $('mixEditorSection').classList.remove('show');
+  $('mixBottomBar').classList.remove('show');
+  $('mixSection').classList.remove('show');
+  setStyle('uploadSection', 'flex');
+}
+
+// ── Main video upload ─────────────────────────────────────────────────────────
+const mixMainDrop = $('mixMainDrop');
+const mixMainFile = $('mixMainFile');
+
+mixMainFile.addEventListener('change', e => {
+  if (e.target.files[0]) uploadMixMain(e.target.files[0]);
+});
+mixMainDrop.addEventListener('dragover', e => { e.preventDefault(); mixMainDrop.classList.add('over'); });
+mixMainDrop.addEventListener('dragleave', () => mixMainDrop.classList.remove('over'));
+mixMainDrop.addEventListener('drop', e => {
+  e.preventDefault(); mixMainDrop.classList.remove('over');
+  if (e.dataTransfer.files[0]) uploadMixMain(e.dataTransfer.files[0]);
+});
+
+async function uploadMixMain(file) {
+  $('mixMainName').textContent = file.name;
+  $('mixMainStatus').className = 'slot-status working';
+  $('mixMainStatus').textContent = 'uploading...';
+  $('mixError').classList.remove('show');
+
+  // Hide the drop zone once file chosen
+  mixMainDrop.style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  let res;
+  try {
+    res = await fetch('/upload?threshold=0.3', { method: 'POST', body: fd });
+  } catch {
+    showMixError('Network error uploading main video');
+    mixMainDrop.style.display = '';
+    return;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showMixError(err.detail || 'Upload failed');
+    mixMainDrop.style.display = '';
+    return;
+  }
+  const data = await res.json();
+  mixMainJobId = data.job_id;
+  pollMixJob(mixMainJobId, 'main');
+}
+
+// ── Extra video upload ────────────────────────────────────────────────────────
+$('btnAddVideo2').addEventListener('click', () => triggerExtraUpload(0));
+$('btnAddVideo3').addEventListener('click', () => triggerExtraUpload(1));
+
+function triggerExtraUpload(slot) {
+  $('mixExtraFile')._slot = slot;
+  $('mixExtraFile').value = '';
+  $('mixExtraFile').click();
+}
+
+$('mixExtraFile').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const slot = e.target._slot; // 0 or 1
+  await uploadMixExtra(file, slot);
+});
+
+async function uploadMixExtra(file, slot) {
+  const color = MIX_COLORS[slot];
+  const label = `Video ${slot + 2}`;
+
+  // Create/update slot row
+  let slotEl = $(`mixExtraSlot_${slot}`);
+  if (!slotEl) {
+    slotEl = document.createElement('div');
+    slotEl.className = 'mix-video-slot';
+    slotEl.id = `mixExtraSlot_${slot}`;
+    $('mixExtraSlots').appendChild(slotEl);
+  }
+  slotEl.innerHTML = `
+    <span class="slot-label" style="color:${color}">${label}</span>
+    <span class="slot-name">${file.name}</span>
+    <span class="slot-status working" id="mixExtraStatus_${slot}">uploading...</span>
+  `;
+
+  // Hide the button that triggered this
+  if (slot === 0) $('btnAddVideo2').classList.remove('visible');
+  if (slot === 1) $('btnAddVideo3').classList.remove('visible');
+
+  const fd = new FormData();
+  fd.append('file', file);
+  let res;
+  try {
+    res = await fetch('/upload?threshold=0.3', { method: 'POST', body: fd });
+  } catch {
+    showMixError(`Network error uploading ${label}`);
+    return;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showMixError(err.detail || `Failed to upload ${label}`);
+    return;
+  }
+  const data = await res.json();
+
+  // Store in mixExtraJobs (by slot index, padding if needed)
+  while (mixExtraJobs.length <= slot) mixExtraJobs.push(null);
+  mixExtraJobs[slot] = { jobId: data.job_id, label, color, scenes: [], name: file.name };
+
+  pollMixJob(data.job_id, 'extra', slot);
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
+function pollMixJob(jid, type, slot) {
+  if (mixPollTimers[jid]) clearInterval(mixPollTimers[jid]);
+  mixPollTimers[jid] = setInterval(async () => {
+    let data;
+    try {
+      const res = await fetch(`/status/${jid}`);
+      data = await res.json();
+    } catch { return; }
+
+    if (type === 'main') {
+      if (data.status === 'ready') {
+        clearInterval(mixPollTimers[jid]);
+        $('mixMainStatus').className = 'slot-status ready';
+        $('mixMainStatus').textContent = `ready (${data.scenes.length} scenes)`;
+        // Store scenes on main job entry
+        mixMainJobId = jid;
+        // Show add video buttons
+        $('btnAddVideo2').classList.add('visible');
+        checkMixEditorReady();
+      } else if (data.status === 'error') {
+        clearInterval(mixPollTimers[jid]);
+        $('mixMainStatus').className = 'slot-status error';
+        $('mixMainStatus').textContent = 'error';
+        showMixError(data.error || 'Scene detection failed for main video');
+      } else {
+        $('mixMainStatus').className = 'slot-status working';
+        $('mixMainStatus').textContent = data.step || 'processing...';
+      }
+    } else if (type === 'extra') {
+      const statusEl = $(`mixExtraStatus_${slot}`);
+      if (data.status === 'ready') {
+        clearInterval(mixPollTimers[jid]);
+        if (statusEl) {
+          statusEl.className = 'slot-status ready';
+          statusEl.textContent = `ready (${data.scenes.length} scenes)`;
+        }
+        if (mixExtraJobs[slot]) mixExtraJobs[slot].scenes = data.scenes;
+        // Show Video 3 button if slot 0 just finished and slot 1 not yet used
+        if (slot === 0 && (!mixExtraJobs[1] || !mixExtraJobs[1].jobId)) {
+          $('btnAddVideo3').classList.add('visible');
+        }
+        checkMixEditorReady();
+      } else if (data.status === 'error') {
+        clearInterval(mixPollTimers[jid]);
+        if (statusEl) {
+          statusEl.className = 'slot-status error';
+          statusEl.textContent = 'error';
+        }
+        showMixError(data.error || `Scene detection failed for Video ${slot + 2}`);
+      } else {
+        if (statusEl) {
+          statusEl.className = 'slot-status working';
+          statusEl.textContent = data.step || 'processing...';
+        }
+      }
+    }
+  }, 1200);
+}
+
+async function checkMixEditorReady() {
+  // Need main + at least one extra, all ready
+  if (!mixMainJobId) return;
+  const readyExtras = mixExtraJobs.filter(j => j && j.scenes.length > 0);
+  if (readyExtras.length === 0) return;
+
+  // Fetch main video scenes if not yet loaded
+  if (!window.mixMainScenes || window.mixMainScenes.length === 0) {
+    try {
+      const res = await fetch(`/status/${mixMainJobId}`);
+      const data = await res.json();
+      window.mixMainScenes = data.scenes || [];
+    } catch { return; }
+  }
+
+  // Pre-populate timeline with main video scenes (only on first open)
+  if (mixTimeline.length === 0 && window.mixMainScenes.length > 0) {
+    window.mixMainScenes.forEach(scene => {
+      mixTimeline.push({ jobId: mixMainJobId, sceneIndex: scene.index, scene });
+    });
+  }
+
+  // Switch to editor
+  $('mixUploadSection').style.display = 'none';
+  $('mixEditorSection').classList.add('show');
+  $('mixBottomBar').classList.add('show');
+  renderMixEditor();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderMixEditor() {
+  renderSourcePanels();
+  renderTimeline();
+  updateMixSummary();
+}
+
+function renderSourcePanels() {
+  const container = $('mixSources');
+  container.innerHTML = '';
+  mixExtraJobs.forEach((jobEntry, slot) => {
+    if (!jobEntry || jobEntry.scenes.length === 0) return;
+    container.appendChild(buildSourcePanel(jobEntry));
+  });
+}
+
+function buildSourcePanel(jobEntry) {
+  const usedKeys = new Set(
+    mixTimeline.filter(t => t.jobId === jobEntry.jobId).map(t => t.sceneIndex)
+  );
+
+  const panel = document.createElement('div');
+  panel.className = 'mix-source-panel';
+
+  const header = document.createElement('div');
+  header.className = 'panel-header';
+  header.style.background = jobEntry.color + '22';
+  header.innerHTML = `
+    <span class="panel-color-dot" style="background:${jobEntry.color}"></span>
+    <span style="color:${jobEntry.color}">${jobEntry.label}</span>
+    <span style="color:var(--muted);font-weight:400;margin-left:4px">${jobEntry.name}</span>
+  `;
+  panel.appendChild(header);
+
+  const scenesEl = document.createElement('div');
+  scenesEl.className = 'panel-scenes';
+
+  jobEntry.scenes.forEach(scene => {
+    const sc = document.createElement('div');
+    sc.className = 'mix-source-scene' + (usedKeys.has(scene.index) ? ' used' : '');
+    sc.draggable = !usedKeys.has(scene.index);
+
+    const thumb = scene.thumbnail
+      ? `<img src="${scene.thumbnail}" loading="lazy" alt="scene ${scene.index}"/>`
+      : `<div class="no-thumb-sm">🎞️</div>`;
+
+    sc.innerHTML = `${thumb}<div class="sc-dur">${fmt(scene.duration)}</div>`;
+
+    sc.addEventListener('dragstart', e => {
+      if (usedKeys.has(scene.index)) { e.preventDefault(); return; }
+      dragSrc = { type: 'source', jobId: jobEntry.jobId, sceneIndex: scene.index };
+      e.dataTransfer.setData('application/json', JSON.stringify(dragSrc));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    scenesEl.appendChild(sc);
+  });
+
+  panel.appendChild(scenesEl);
+  return panel;
+}
+
+function renderTimeline() {
+  const list = $('mixTimelineList');
+  const empty = $('mixTimelineEmpty');
+
+  // Remove all items except the empty placeholder
+  Array.from(list.children).forEach(c => {
+    if (c !== empty) c.remove();
+  });
+
+  if (mixTimeline.length === 0) {
+    empty.style.display = '';
+    $('mixTimelineCount').textContent = '0 scenes';
+    return;
+  }
+
+  empty.style.display = 'none';
+  $('mixTimelineCount').textContent = `${mixTimeline.length} scene${mixTimeline.length !== 1 ? 's' : ''}`;
+
+  // Top drop zone
+  list.insertBefore(makeDropZone(0), empty);
+
+  mixTimeline.forEach((item, idx) => {
+    const row = buildTimelineItem(item, idx);
+    list.insertBefore(row, empty);
+    list.insertBefore(makeDropZone(idx + 1), empty);
+  });
+}
+
+function buildTimelineItem(item, idx) {
+  const row = document.createElement('div');
+  row.className = 'mix-timeline-item';
+  row.draggable = true;
+
+  // Determine color and label
+  let color = MIX_MAIN_COLOR;
+  let label = 'Main';
+  if (item.jobId !== mixMainJobId) {
+    const entry = mixExtraJobs.find(j => j && j.jobId === item.jobId);
+    if (entry) { color = entry.color; label = entry.label; }
+  }
+
+  const thumb = item.scene.thumbnail
+    ? `<img src="${item.scene.thumbnail}" loading="lazy" alt="scene"/>`
+    : `<div class="no-thumb-ti">🎞️</div>`;
+
+  row.innerHTML = `
+    ${thumb}
+    <div class="ti-info">
+      <span class="ti-label" style="background:${color}22;color:${color}">${label} #${item.sceneIndex + 1}</span>
+      <div class="ti-dur">${fmt(item.scene.duration)}</div>
+    </div>
+    <button class="ti-del" title="Remove">✕</button>
+  `;
+
+  row.querySelector('.ti-del').addEventListener('click', e => {
+    e.stopPropagation();
+    removeFromTimeline(idx);
+  });
+
+  row.addEventListener('dragstart', e => {
+    dragSrc = { type: 'timeline', timelineIdx: idx };
+    e.dataTransfer.setData('application/json', JSON.stringify(dragSrc));
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  return row;
+}
+
+function makeDropZone(position) {
+  const dz = document.createElement('div');
+  dz.className = 'mix-drop-zone';
+  dz.dataset.pos = position;
+
+  dz.addEventListener('dragover', e => {
+    e.preventDefault();
+    dz.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+  });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    let src;
+    try { src = JSON.parse(e.dataTransfer.getData('application/json')); } catch { return; }
+    const pos = parseInt(dz.dataset.pos);
+
+    if (src.type === 'source') {
+      insertIntoTimeline(pos, src.jobId, src.sceneIndex);
+    } else if (src.type === 'timeline') {
+      reorderTimeline(src.timelineIdx, pos);
+    }
+  });
+
+  return dz;
+}
+
+// ── Timeline operations ───────────────────────────────────────────────────────
+function insertIntoTimeline(position, jobId, sceneIndex) {
+  // Find the scene data
+  let scene = null;
+  if (jobId === mixMainJobId) {
+    // Scenes from main job — fetch from server status or find via extra
+    // Main job scenes stored in window.mixMainScenes
+    scene = (window.mixMainScenes || []).find(s => s.index === sceneIndex);
+  } else {
+    const entry = mixExtraJobs.find(j => j && j.jobId === jobId);
+    if (entry) scene = entry.scenes.find(s => s.index === sceneIndex);
+  }
+  if (!scene) return;
+
+  mixTimeline.splice(position, 0, { jobId, sceneIndex, scene });
+  renderMixEditor();
+  updateMixSummary();
+}
+
+function reorderTimeline(fromIdx, toPos) {
+  const item = mixTimeline.splice(fromIdx, 1)[0];
+  // Adjust position after removal
+  const adjustedPos = toPos > fromIdx ? toPos - 1 : toPos;
+  mixTimeline.splice(adjustedPos, 0, item);
+  renderMixEditor();
+  updateMixSummary();
+}
+
+function removeFromTimeline(idx) {
+  mixTimeline.splice(idx, 1);
+  renderTimeline();
+  renderSourcePanels();
+  updateMixSummary();
+}
+
+function updateMixSummary() {
+  const totalDur = mixTimeline.reduce((a, t) => a + t.scene.duration, 0);
+  $('mixSummaryText').innerHTML = `<strong>${mixTimeline.length}</strong> scenes in timeline`;
+  $('mixSummaryDur').textContent = `Total duration: ${fmt(totalDur)}`;
+  $('btnExportMix').disabled = mixTimeline.length === 0;
+}
+
+// ── Mix export ────────────────────────────────────────────────────────────────
+$('btnExportMix').addEventListener('click', exportMix);
+$('btnMixClear').addEventListener('click', () => {
+  mixTimeline = [];
+  renderMixEditor();
+  updateMixSummary();
+});
+
+async function exportMix() {
+  if (mixTimeline.length === 0) return;
+
+  $('mixExportSpinner').style.display = 'block';
+  $('mixExportTitle').textContent = 'Exporting mix...';
+  $('mixExportSub').textContent = 'Cutting and merging scenes';
+  $('mixExportOverlay').classList.add('show');
+
+  const timelinePayload = mixTimeline.map(t => ({
+    job_id: t.jobId,
+    scene_index: t.sceneIndex,
+  }));
+
+  let res;
+  try {
+    res = await fetch('/export-mix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(timelinePayload),
+    });
+  } catch {
+    $('mixExportSpinner').style.display = 'none';
+    $('mixExportTitle').textContent = 'Export failed';
+    $('mixExportSub').textContent = 'Network error';
+    return;
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    $('mixExportSpinner').style.display = 'none';
+    $('mixExportTitle').textContent = 'Export failed';
+    $('mixExportSub').textContent = err.detail || 'Unknown error';
+    return;
+  }
+
+  const data = await res.json();
+  const mixJobId = data.job_id;
+
+  // Poll for completion
+  const timer = setInterval(async () => {
+    let st;
+    try {
+      const r = await fetch(`/status/${mixJobId}`);
+      st = await r.json();
+    } catch { return; }
+
+    if (st.status === 'done') {
+      clearInterval(timer);
+      $('mixExportSpinner').style.display = 'none';
+      $('mixExportTitle').textContent = '✅ Done!';
+      $('mixExportSub').innerHTML = `
+        <a href="/download-mix/${mixJobId}" class="btn-dl">⬇️ Download mix</a>
+        <button class="btn-back" onclick="$('mixExportOverlay').classList.remove('show')">← Back to editor</button>
+      `;
+    } else if (st.status === 'error') {
+      clearInterval(timer);
+      $('mixExportSpinner').style.display = 'none';
+      $('mixExportTitle').textContent = '❌ Export failed';
+      $('mixExportSub').textContent = st.error || 'Unknown error';
+    } else {
+      $('mixExportSub').textContent = st.step || 'Processing...';
+    }
+  }, 1200);
+}
+
+// ── "Mix Mode" button on upload page ─────────────────────────────────────────
+// (Already wired via enterMixMode above)
 </script>
 </body>
 </html>

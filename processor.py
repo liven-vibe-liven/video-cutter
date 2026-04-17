@@ -333,6 +333,58 @@ async def process_upload(job_id: str, threshold: float = 0.3):
         update_job(job_id, status="error", step="Error", error=str(e))
 
 
+async def export_mix_video(timeline: list[dict], output_path: str, mix_job_id: str):
+    """Export a mix of scenes from multiple source videos."""
+    import tempfile, shutil as _shutil
+    try:
+        update_job(mix_job_id, step="Preparing...", progress=5)
+        tmp_dir = Path(tempfile.mkdtemp())
+        try:
+            temp_files = []
+            total = len(timeline)
+            for i, item in enumerate(timeline):
+                job_id = item["job_id"]
+                scene_index = item["scene_index"]
+                if job_id not in jobs:
+                    raise ValueError(f"Job {job_id} not found")
+                source_job = jobs[job_id]
+                scene = next((s for s in source_job.scenes if s["index"] == scene_index), None)
+                if not scene:
+                    raise ValueError(f"Scene {scene_index} not found")
+                tmp_out = str(tmp_dir / f"seg_{i:04d}.mp4")
+                dur = round(scene["duration"], 3)
+                update_job(mix_job_id, step=f"Cutting scene {i+1}/{total}...", progress=10 + int(80*(i+1)//total))
+                # Try re-encode, fall back to stream copy
+                cmd = [FFMPEG, "-y", "-ss", str(scene["start"]), "-i", source_job.input_path,
+                       "-t", str(dur), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                       "-pix_fmt", "yuv420p", "-threads", "1", "-c:a", "aac", "-b:a", "128k", tmp_out]
+                r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                if r.returncode != 0 or not Path(tmp_out).exists() or Path(tmp_out).stat().st_size < 1000:
+                    cmd = [FFMPEG, "-y", "-ss", str(scene["start"]), "-i", source_job.input_path,
+                           "-t", str(dur), "-c", "copy", "-avoid_negative_ts", "make_zero", tmp_out]
+                    r2 = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                    if r2.returncode != 0:
+                        lines = [l for l in r2.stderr.splitlines() if l.strip()]
+                        raise RuntimeError(f"Segment {i} failed:\n" + "\n".join(lines[-5:]))
+                temp_files.append(tmp_out)
+            update_job(mix_job_id, step="Concatenating...", progress=92)
+            list_path = str(tmp_dir / "list.txt")
+            with open(list_path, "w", encoding="utf-8") as f:
+                for tf in temp_files:
+                    f.write(f"file '{tf}'\n")
+            cmd = [FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", list_path,
+                   "-c", "copy", "-movflags", "+faststart", output_path]
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if r.returncode != 0:
+                lines = [l for l in r.stderr.splitlines() if l.strip()]
+                raise RuntimeError("Concat failed:\n" + "\n".join(lines[-5:]))
+            update_job(mix_job_id, status="done", step="Done", progress=100)
+        finally:
+            _shutil.rmtree(tmp_dir, ignore_errors=True)
+    except Exception as e:
+        update_job(mix_job_id, status="error", step="Error", error=str(e))
+
+
 async def export_video(job_id: str, keep_indices: list[int]):
     """Export video keeping only selected scenes."""
     job = jobs.get(job_id)
